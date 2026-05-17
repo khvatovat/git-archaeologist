@@ -45,14 +45,26 @@ def _shape_comment(c: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_MAX_CONCURRENCY = 10
+_MAX_WAIT_SECONDS = 90
+
+
+def _raise_first_error(results: list) -> None:
+    for r in results:
+        if isinstance(r, BaseException):
+            raise r
+
+
 class GitHubFetcher:
     def __init__(self, token: str | None, console: Console) -> None:
         self._headers = _auth_headers(token)
         self._console = console
         self._client: httpx.AsyncClient
+        self._sem: asyncio.Semaphore
 
     async def __aenter__(self) -> "GitHubFetcher":
         self._client = httpx.AsyncClient(headers=self._headers, timeout=30)
+        self._sem = asyncio.Semaphore(_MAX_CONCURRENCY)
         await self._client.__aenter__()
         return self
 
@@ -67,22 +79,29 @@ class GitHubFetcher:
     async def _get(
         self, url: str, params: dict[str, Any] | None = None
     ) -> httpx.Response:
-        for attempt in range(6):
-            resp = await self._client.get(url, params=params)
-            if resp.status_code in (200, 404):
-                return resp
-            if resp.status_code in (403, 429):
-                reset = resp.headers.get("X-RateLimit-Reset")
-                wait = max(1, int(reset) - int(time.time()) + 1) if reset else 2**attempt
-                self._console.log(f"[yellow]rate limited, waiting {wait}s[/yellow]")
-                await asyncio.sleep(wait)
-            else:
-                wait = 2**attempt
-                self._console.log(
-                    f"[yellow]HTTP {resp.status_code}, retrying in {wait}s[/yellow]"
-                )
-                await asyncio.sleep(wait)
-        return resp
+        async with self._sem:
+            for attempt in range(6):
+                resp = await self._client.get(url, params=params)
+                if resp.status_code in (200, 404):
+                    return resp
+                if resp.status_code in (403, 429):
+                    reset = resp.headers.get("X-RateLimit-Reset")
+                    wait = max(1, int(reset) - int(time.time()) + 1) if reset else 2**attempt
+                    if wait > _MAX_WAIT_SECONDS:
+                        reset_at = time.strftime("%H:%M:%S", time.localtime(int(reset))) if reset else "unknown"
+                        hint = "" if self._headers.get("Authorization") else " Set GITHUB_TOKEN to raise the limit."
+                        raise RuntimeError(
+                            f"GitHub rate limit exceeded — resets at {reset_at} ({wait}s).{hint}"
+                        )
+                    self._console.log(f"[yellow]rate limited, waiting {wait}s[/yellow]")
+                    await asyncio.sleep(wait)
+                else:
+                    wait = 2**attempt
+                    self._console.log(
+                        f"[yellow]HTTP {resp.status_code}, retrying in {wait}s[/yellow]"
+                    )
+                    await asyncio.sleep(wait)
+            return resp
 
     async def _paginate(
         self, url: str, params: dict[str, Any] | None = None
@@ -162,8 +181,10 @@ class GitHubFetcher:
             *(
                 self._get(f"{GITHUB_API}/repos/{repo}/commits/{c['sha']}/pulls")
                 for c in raw_commits
-            )
+            ),
+            return_exceptions=True,
         )
+        _raise_first_error(assoc_resps)
 
         pr_numbers: set[int] = set()
         commits: list[dict[str, Any]] = []
@@ -171,10 +192,12 @@ class GitHubFetcher:
             msg = commit["commit"]["message"]
             author = commit["commit"]["author"]
             nums: set[int] = set()
-            if assoc.status_code == 200:
+            if isinstance(assoc, BaseException):
+                pass
+            elif assoc.status_code == 200:
                 for pr in assoc.json():
                     nums.add(pr["number"])
-            elif assoc.status_code != 200:
+            else:
                 self._console.log(f"[red]commits/{commit['sha'][:7]}/pulls → {assoc.status_code}[/red]")
             # squash-merged PRs aren't linked via the API; parse the commit message
             nums |= {int(m) for m in re.findall(r"\(#(\d+)\)", msg)}
@@ -197,10 +220,12 @@ class GitHubFetcher:
                 f"fetching {len(pr_numbers)} PRs with comments and linked issues"
             )
             pr_results = await asyncio.gather(
-                *(self._fetch_pr(repo, n) for n in sorted(pr_numbers))
+                *(self._fetch_pr(repo, n) for n in sorted(pr_numbers)),
+                return_exceptions=True,
             )
+            _raise_first_error(pr_results)
             for pr in pr_results:
-                if pr:
+                if pr and not isinstance(pr, BaseException):
                     prs_by_number[pr["number"]] = pr
 
         for c in commits:
