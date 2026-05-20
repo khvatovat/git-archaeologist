@@ -7,6 +7,8 @@ from typing import Any
 import httpx
 from rich.console import Console
 
+from exceptions import FetchError
+
 GITHUB_API = "https://api.github.com"
 
 
@@ -90,7 +92,7 @@ class GitHubFetcher:
                     if wait > _MAX_WAIT_SECONDS:
                         reset_at = time.strftime("%H:%M:%S", time.localtime(int(reset))) if reset else "unknown"
                         hint = "" if self._headers.get("Authorization") else " Set GITHUB_TOKEN to raise the limit."
-                        raise RuntimeError(
+                        raise FetchError(
                             f"GitHub rate limit exceeded — resets at {reset_at} ({wait}s).{hint}"
                         )
                     self._console.log(f"[yellow]rate limited, waiting {wait}s[/yellow]")
@@ -101,7 +103,9 @@ class GitHubFetcher:
                         f"[yellow]HTTP {resp.status_code}, retrying in {wait}s[/yellow]"
                     )
                     await asyncio.sleep(wait)
-            return resp
+        raise FetchError(
+            f"GitHub API request failed after 6 attempts: {url} (last status: {resp.status_code})"
+        )
 
     async def _paginate(
         self, url: str, params: dict[str, Any] | None = None
@@ -193,7 +197,7 @@ class GitHubFetcher:
             author = commit["commit"]["author"]
             nums: set[int] = set()
             if isinstance(assoc, BaseException):
-                pass
+                self._console.log(f"[yellow]commits/{commit['sha'][:7]}/pulls — association lookup failed[/yellow]")
             elif assoc.status_code == 200:
                 for pr in assoc.json():
                     nums.add(pr["number"])

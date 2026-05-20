@@ -1,9 +1,12 @@
 import asyncio
 import json
-import random
+from collections.abc import Callable
 from typing import Any
 
 import anthropic
+
+from cache import chunk_hash
+from exceptions import SummarizationError
 
 MODEL = "claude-haiku-4-5-20251001"
 _INPUT_COST_PER_M = 0.80
@@ -30,7 +33,6 @@ Write 2-4 plain prose sentences. No markdown headers or bullet points. Be specif
 
 
 _MAX_RETRIES = 6
-_RETRY_BASE = 2.0
 
 
 async def summarize_chunk(
@@ -58,37 +60,51 @@ async def summarize_chunk(
                 "input_tokens": msg.usage.input_tokens,
                 "output_tokens": msg.usage.output_tokens,
             }
-        except anthropic.RateLimitError:
+        except anthropic.RateLimitError as e:
             if attempt == _MAX_RETRIES - 1:
-                raise
-            wait = _RETRY_BASE ** attempt + random.uniform(0, 1)
+                raise SummarizationError(f"Era {chunk['era_index']} failed: rate limit after {_MAX_RETRIES} attempts") from e
+            # Respect retry-after header; fall back to 60s (full TPM window)
+            wait = 60.0
+            try:
+                header = e.response.headers.get("retry-after", "")
+                if header:
+                    wait = float(header) + 2.0
+            except Exception:
+                pass
             await asyncio.sleep(wait)
+    raise SummarizationError(f"Era {chunk['era_index']} failed after {_MAX_RETRIES} attempts")  # pragma: no cover
 
 
-_CONCURRENCY = 2
+_INTER_REQUEST_DELAY = 3.0  # seconds between requests; keeps throughput under 50k tokens/min
 
 
 async def summarize_all(
     chunks: list[dict[str, Any]],
-    progress=None,
-    task_id=None,
+    on_progress: Callable[[int, int], None] | None = None,
+    cached: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     client = anthropic.AsyncAnthropic()
-    sem = asyncio.Semaphore(_CONCURRENCY)
-
-    async def _run(chunk: dict[str, Any]) -> dict[str, Any]:
-        async with sem:
-            result = await summarize_chunk(client, chunk)
-        if progress is not None and task_id is not None:
-            progress.advance(task_id)
-        return result
-
-    results = await asyncio.gather(*[_run(c) for c in chunks])
+    results: list[dict[str, Any]] = []
+    total = len(chunks)
+    need_delay = False
+    for i, c in enumerate(chunks):
+        h = chunk_hash(c)
+        if cached and h in cached:
+            results.append({**cached[h], "_cached": True})
+        else:
+            if need_delay:
+                await asyncio.sleep(_INTER_REQUEST_DELAY)
+            result = await summarize_chunk(client, c)
+            results.append({**result, "_cached": False})
+            need_delay = True
+        if on_progress is not None:
+            on_progress(i + 1, total)
     return sorted(results, key=lambda r: r["era_index"])
 
 
 def cost_estimate(summaries: list[dict[str, Any]]) -> tuple[int, int, float]:
-    total_in = sum(s["input_tokens"] for s in summaries)
-    total_out = sum(s["output_tokens"] for s in summaries)
+    fresh = [s for s in summaries if not s.get("_cached", False)]
+    total_in = sum(s["input_tokens"] for s in fresh)
+    total_out = sum(s["output_tokens"] for s in fresh)
     cost = (total_in / 1_000_000) * _INPUT_COST_PER_M + (total_out / 1_000_000) * _OUTPUT_COST_PER_M
     return total_in, total_out, cost

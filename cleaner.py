@@ -27,12 +27,17 @@ def _clean_comments(comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return cleaned
 
 
+def _clean_linked_issue(issue: dict[str, Any]) -> dict[str, Any]:
+    return {**issue, "body": _clean_text(issue.get("body"))}
+
+
 def _clean_pr(pr: dict[str, Any]) -> dict[str, Any]:
     return {
         **pr,
         "body": _clean_text(pr.get("body")),
         "review_comments": _clean_comments(pr.get("review_comments", [])),
         "issue_comments": _clean_comments(pr.get("issue_comments", [])),
+        "linked_issues": [_clean_linked_issue(i) for i in pr.get("linked_issues", [])],
     }
 
 

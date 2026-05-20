@@ -207,3 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 tools/database/database.db
+
+# git-archaeologist outputs
+.archaeologist_cache/
+reports/
