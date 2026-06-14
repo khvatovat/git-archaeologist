@@ -1,0 +1,97 @@
+# GitLab CI — Pipeline C
+# This repo is mirrored from GitHub. GitLab's built-in SAST and
+# Dependency Scanning templates run here using a different toolchain
+# from the GitHub Actions pipelines (Semgrep SAST vs SonarCloud,
+# Gemnasium vs Trivy filesystem).
+
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+image: python:3.11-slim
+
+variables:
+  PYTHON_VERSION: "3.11"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip/
+
+stages:
+  - test
+  - scan
+  - build
+
+# ── Unit Tests ────────────────────────────────────────────────────────────────
+
+unit-tests:
+  stage: test
+  before_script:
+    - pip install --quiet
+        fastapi uvicorn boto3 pydantic
+        anthropic httpx rich python-dotenv
+        pytest pytest-asyncio "moto[dynamodb,sqs,secretsmanager]"
+        coverage
+  script:
+    - coverage run -m pytest api/tests/ worker/tests/ -v --tb=short
+    - coverage report
+    - coverage xml
+  coverage: '/TOTAL.+?(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    when: always
+
+# ── Security Scans (GitLab templates — distinct from GitHub toolchain) ─────────
+# SAST uses Semgrep (GitLab template) — different from SonarCloud used in GHA
+# Dependency-Scanning uses Gemnasium — different from Trivy used in GHA
+
+sast:
+  stage: scan
+  variables:
+    SAST_EXCLUDED_PATHS: ".venv,venv,.git,reports"
+  allow_failure: false
+
+dependency_scanning:
+  stage: scan
+  variables:
+    DS_EXCLUDED_PATHS: ".venv,venv,.git"
+  allow_failure: false
+
+secret_detection:
+  stage: scan
+  allow_failure: false
+
+# ── Docker Build Verification ────────────────────────────────────────────────
+
+build-api:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker build -f api/Dockerfile -t git-archaeologist-api:$CI_COMMIT_SHORT_SHA .
+    - echo "API image built successfully — $CI_COMMIT_SHORT_SHA"
+  only:
+    - main
+    - merge_requests
+
+build-worker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker build -f worker/Dockerfile -t git-archaeologist-worker:$CI_COMMIT_SHORT_SHA .
+    - echo "Worker image built successfully — $CI_COMMIT_SHORT_SHA"
+  only:
+    - main
+    - merge_requests

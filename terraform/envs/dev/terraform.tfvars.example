@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars and fill in values — never commit terraform.tfvars
+project    = "git-archaeologist"
+aws_region = "us-east-1"
+azs        = ["us-east-1a", "us-east-1b"]
+
+# These are injected into Secrets Manager — never hard-code real values here
+anthropic_api_key = "sk-ant-..."
+github_token      = "ghp_..."
+
+# Set after first ECR push (pipeline fills these in via -var flags)
+# api_image    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/git-archaeologist-dev-api:latest"
+# worker_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/git-archaeologist-dev-worker:latest"

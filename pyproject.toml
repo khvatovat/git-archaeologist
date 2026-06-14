@@ -28,6 +28,19 @@ dev = [
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "boto3>=1.43.34",
+    "coverage>=7.14.2",
+    "fastapi>=0.138.0",
+    "httpx>=0.28.1",
+    "moto[dynamodb,secretsmanager,sqs]>=5.2.2",
+    "pydantic>=2.13.4",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "uvicorn>=0.49.0",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

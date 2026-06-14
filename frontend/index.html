@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>git-archaeologist — watched repos</title>
+  <style>
+    body { font-family: monospace; max-width: 820px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #f4f4f4; }
+    a { color: #0066cc; }
+    form { margin-top: 24px; display: flex; gap: 8px; flex-wrap: wrap; }
+    input { font-family: monospace; padding: 6px 8px; border: 1px solid #999; width: 200px; }
+    button { padding: 6px 14px; cursor: pointer; }
+    .err { color: red; margin-top: 8px; }
+    .ok  { color: green; margin-top: 8px; }
+    #webhook-info { background: #fffbe6; border: 1px solid #e5c000; padding: 12px; margin-top: 16px; display: none; }
+    code { background: #f0f0f0; padding: 2px 4px; }
+  </style>
+</head>
+<body>
+
+<h1>git-archaeologist / watched repos</h1>
+<p>Each push to a registered repo triggers an automatic file-history analysis.</p>
+
+<table>
+  <thead>
+    <tr><th>Repo</th><th>Path</th><th>Registered</th><th>Webhook secret</th><th>History</th></tr>
+  </thead>
+  <tbody id="repos-tbody">
+    <tr><td colspan="5">loading…</td></tr>
+  </tbody>
+</table>
+
+<h2 style="margin-top:32px;font-size:1rem;">Register a repo</h2>
+<form id="register-form">
+  <input id="repo-name" type="text" placeholder="owner/repo" required />
+  <input id="repo-path" type="text" placeholder="path (e.g. README.md)" value="README.md" />
+  <button type="submit">Watch</button>
+</form>
+<div id="form-msg"></div>
+
+<div id="webhook-info">
+  <strong>Webhook registered.</strong> Set up a GitHub webhook on the repo:
+  <ul>
+    <li>Payload URL: <code id="wh-url"></code></li>
+    <li>Content type: <code>application/json</code></li>
+    <li>Secret: <code id="wh-secret"></code></li>
+    <li>Events: <strong>Just the push event</strong></li>
+  </ul>
+</div>
+
+<script>
+  const API = window.API_BASE || '';
+
+  async function loadRepos() {
+    const tbody = document.getElementById('repos-tbody');
+    try {
+      const r = await fetch(`${API}/repos`);
+      const data = await r.json();
+      const repos = data.repos || [];
+      if (!repos.length) {
+        tbody.innerHTML = '<tr><td colspan="5">no repos registered yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = repos.map(repo => `
+        <tr>
+          <td><a href="https://github.com/${repo.name}" target="_blank">${repo.name}</a></td>
+          <td><code>${repo.path}</code></td>
+          <td>${(repo.created_at || '').slice(0, 10)}</td>
+          <td><code>${repo.webhook_secret.slice(0, 12)}…</code></td>
+          <td><a href="history.html?repo_id=${repo.repo_id}&name=${encodeURIComponent(repo.name)}">view history</a></td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="5" class="err">failed to load: ${e.message}</td></tr>`;
+    }
+  }
+
+  document.getElementById('register-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = document.getElementById('form-msg');
+    const info = document.getElementById('webhook-info');
+    const name = document.getElementById('repo-name').value.trim();
+    const path = document.getElementById('repo-path').value.trim() || 'README.md';
+
+    msg.textContent = 'registering…';
+    msg.className = '';
+    info.style.display = 'none';
+
+    try {
+      const r = await fetch(`${API}/repos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, path }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const repo = await r.json();
+
+      msg.textContent = 'registered successfully';
+      msg.className = 'ok';
+
+      document.getElementById('wh-url').textContent = `${location.origin}${API}/webhook`;
+      document.getElementById('wh-secret').textContent = repo.webhook_secret;
+      info.style.display = 'block';
+
+      await loadRepos();
+    } catch (e) {
+      msg.textContent = `error: ${e.message}`;
+      msg.className = 'err';
+    }
+  });
+
+  loadRepos();
+</script>
+</body>
+</html>

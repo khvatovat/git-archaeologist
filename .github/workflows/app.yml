@@ -1,0 +1,180 @@
+name: App CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "worker/**"
+      - "*.py"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "worker/**"
+      - "*.py"
+      - "pyproject.toml"
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          pip install \
+            fastapi>=0.110 uvicorn boto3 pydantic \
+            anthropic httpx rich python-dotenv \
+            pytest pytest-asyncio moto[dynamodb,sqs,secretsmanager] \
+            coverage
+
+      - name: Run tests with coverage
+        run: |
+          coverage run -m pytest api/tests/ worker/tests/ -v
+          coverage xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  sonar:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps + generate coverage
+        run: |
+          pip install \
+            fastapi>=0.110 uvicorn boto3 pydantic \
+            anthropic httpx rich python-dotenv \
+            pytest pytest-asyncio moto[dynamodb,sqs,secretsmanager] \
+            coverage
+          coverage run -m pytest api/tests/ worker/tests/ -v
+          coverage xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  sca-scan:
+    name: SCA — Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy (filesystem, CRITICAL+HIGH)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "0"
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+
+  build-and-push:
+    name: Build, Scan & Push Images
+    runs-on: ubuntu-latest
+    needs: [test, sca-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: tags
+        run: |
+          SHA="${{ github.sha }}"
+          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          echo "api_image=${REGISTRY}/git-archaeologist-dev-api:${SHA}" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${REGISTRY}/git-archaeologist-dev-worker:${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build API image
+        run: docker build -f api/Dockerfile -t ${{ steps.tags.outputs.api_image }} .
+
+      - name: Trivy scan — API image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ${{ steps.tags.outputs.api_image }}
+          severity: CRITICAL,HIGH
+          format: table
+          exit-code: "1"
+
+      - name: Build worker image
+        run: docker build -f worker/Dockerfile -t ${{ steps.tags.outputs.worker_image }} .
+
+      - name: Trivy scan — worker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ${{ steps.tags.outputs.worker_image }}
+          severity: CRITICAL,HIGH
+          format: table
+          exit-code: "1"
+
+      - name: Push images to ECR
+        run: |
+          docker push ${{ steps.tags.outputs.api_image }}
+          docker push ${{ steps.tags.outputs.worker_image }}
+
+      - name: Deploy API to ECS
+        run: |
+          aws ecs update-service \
+            --cluster git-archaeologist-dev-cluster \
+            --service git-archaeologist-dev-api \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Deploy worker to ECS
+        run: |
+          aws ecs update-service \
+            --cluster git-archaeologist-dev-cluster \
+            --service git-archaeologist-dev-worker \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}

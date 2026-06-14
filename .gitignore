@@ -211,3 +211,17 @@ tools/database/database.db
 # git-archaeologist outputs
 .archaeologist_cache/
 reports/
+
+# Terraform
+terraform/envs/dev/terraform.tfvars
+terraform/envs/dev/.terraform/
+terraform/envs/dev/.terraform.lock.hcl
+*.tfplan
+*.tfstate
+*.tfstate.backup
+
+# Test artifacts
+coverage.xml
+.coverage
+checkov.sarif
+trivy-fs.sarif

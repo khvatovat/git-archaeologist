@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>git-archaeologist — analysis history</title>
+  <style>
+    body { font-family: monospace; max-width: 900px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 1.2rem; }
+    a { color: #0066cc; }
+    .job { border: 1px solid #ccc; padding: 12px; margin-top: 12px; }
+    .job-header { display: flex; gap: 16px; align-items: baseline; }
+    .status { font-weight: bold; }
+    .status.done    { color: green; }
+    .status.running { color: orange; }
+    .status.failed  { color: red; }
+    .status.pending { color: gray; }
+    .sha { color: #555; font-size: 0.85rem; }
+    .result { margin-top: 8px; white-space: pre-wrap; font-size: 0.82rem;
+              background: #f8f8f8; padding: 10px; max-height: 400px; overflow-y: auto;
+              border: 1px solid #ddd; display: none; }
+    .toggle { cursor: pointer; font-size: 0.8rem; color: #0066cc; margin-top: 6px; }
+    .err-text { color: red; margin-top: 6px; font-size: 0.85rem; }
+    .empty { color: #555; }
+  </style>
+</head>
+<body>
+
+<p><a href="index.html">← back to repos</a></p>
+<h1 id="page-title">analysis history</h1>
+<div id="jobs-list"><p>loading…</p></div>
+
+<script>
+  const API = window.API_BASE || '';
+  const params = new URLSearchParams(location.search);
+  const repoId = params.get('repo_id');
+  const repoName = params.get('name') || 'repo';
+
+  document.getElementById('page-title').textContent = `analysis history — ${repoName}`;
+  document.title = `history — ${repoName}`;
+
+  function statusClass(s) {
+    return ['done', 'running', 'failed', 'pending'].includes(s) ? s : 'pending';
+  }
+
+  function renderJob(job) {
+    const div = document.createElement('div');
+    div.className = 'job';
+    const sha = (job.commit_sha || '').slice(0, 8);
+    const ts = (job.created_at || '').slice(0, 16).replace('T', ' ');
+    const branch = job.branch ? ` on ${job.branch}` : '';
+
+    div.innerHTML = `
+      <div class="job-header">
+        <span class="status ${statusClass(job.status)}">${job.status}</span>
+        <span class="sha">${sha}${branch}</span>
+        <span>${ts} UTC</span>
+      </div>
+    `;
+
+    if (job.status === 'failed' && job.error) {
+      const err = document.createElement('div');
+      err.className = 'err-text';
+      err.textContent = job.error;
+      div.appendChild(err);
+    }
+
+    if (job.status === 'done' && job.result) {
+      const toggle = document.createElement('div');
+      toggle.className = 'toggle';
+      toggle.textContent = '▶ show analysis';
+      div.appendChild(toggle);
+
+      const result = document.createElement('pre');
+      result.className = 'result';
+      result.textContent = job.result;
+      div.appendChild(result);
+
+      toggle.addEventListener('click', () => {
+        const visible = result.style.display === 'block';
+        result.style.display = visible ? 'none' : 'block';
+        toggle.textContent = visible ? '▶ show analysis' : '▼ hide analysis';
+      });
+    }
+
+    return div;
+  }
+
+  async function load() {
+    const container = document.getElementById('jobs-list');
+    if (!repoId) {
+      container.innerHTML = '<p class="err-text">missing repo_id in URL</p>';
+      return;
+    }
+    try {
+      const r = await fetch(`${API}/repos/${repoId}/history`);
+      const data = await r.json();
+      const jobs = data.jobs || [];
+      if (!jobs.length) {
+        container.innerHTML = '<p class="empty">no analysis runs yet — push a commit to trigger one</p>';
+        return;
+      }
+      container.innerHTML = '';
+      jobs.forEach(job => container.appendChild(renderJob(job)));
+    } catch (e) {
+      container.innerHTML = `<p class="err-text">failed to load: ${e.message}</p>`;
+    }
+  }
+
+  load();
+  // Auto-refresh every 15s to pick up running jobs
+  setInterval(load, 15000);
+</script>
+</body>
+</html>
