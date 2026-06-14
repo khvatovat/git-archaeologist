@@ -129,26 +129,24 @@ Stages:
 3. **plan** (PRs only) — `terraform plan`, posts output as PR comment; manual review required before merge
 4. **apply** (main push only) — `terraform apply -auto-approve` via GitHub environment `production` (requires reviewer approval in GitHub settings)
 
-### Pipeline C — GitLab CI (mirrored repo)
+### Pipeline C — GitHub Actions (Security Scan)
 
-File: `.gitlab-ci.yml`
-GitLab mirrors the GitHub repo. Uses a **different toolchain** from Pipeline A:
+File: `.github/workflows/security.yml`
+Runs on every push to `main`, every PR, and weekly on a schedule. Uses a **different toolchain** from Pipeline A — same platform, different tools:
 
-| Concern | GitHub Actions (A) | GitLab CI (C) |
+| Concern | Pipeline A (`app.yml`) | Pipeline C (`security.yml`) |
 |---|---|---|
-| SAST | SonarCloud | GitLab Semgrep template |
-| Dependency scan | Trivy (filesystem) | GitLab Gemnasium template |
-| Secret detection | (not in A) | GitLab Secret Detection template |
-| Image build | Push to ECR | Build-only verification |
-
-Stages: `test` → `scan` → `build`.
+| SAST | SonarCloud | Semgrep (p/python, p/owasp-top-ten) |
+| Dependency scan | Trivy filesystem | pip-audit (CVE database) |
+| Secret detection | — | TruffleHog (verified secrets only) |
+| Output | SARIF → GitHub Security tab | SARIF → GitHub Security tab |
 
 ### Screenshots
 
-> _Add green GitHub Actions run screenshot here._
+> _Add green GitHub Actions run screenshot here (all three workflows)._
 > _Add Trivy scan report screenshot here._
 > _Add SonarCloud dashboard screenshot here._
-> _Add GitLab pipeline screenshot here._
+> _Add Semgrep SARIF findings screenshot here._
 > _Add Checkov report screenshot here._
 
 ---
