@@ -24,11 +24,29 @@ variable "github_token_secret_arn" { type = string }
 variable "api_image"    { type = string }
 variable "worker_image" { type = string }
 
-variable "api_cpu"    { type = number; default = 256 }
-variable "api_memory" { type = number; default = 512 }
+variable "api_cpu" {
+  type    = number
+  default = 256
+}
+variable "api_memory" {
+  type    = number
+  default = 512
+}
 
-variable "worker_cpu"    { type = number; default = 512 }
-variable "worker_memory" { type = number; default = 1024 }
+variable "worker_cpu" {
+  type    = number
+  default = 512
+}
+variable "worker_memory" {
+  type    = number
+  default = 1024
+}
 
-variable "api_desired_count"    { type = number; default = 1 }
-variable "worker_desired_count" { type = number; default = 1 }
+variable "api_desired_count" {
+  type    = number
+  default = 1
+}
+variable "worker_desired_count" {
+  type    = number
+  default = 1
+}

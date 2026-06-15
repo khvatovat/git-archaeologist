@@ -9,11 +9,16 @@ resource "aws_cloudwatch_dashboard" "main" {
     widgets = [
       {
         type   = "metric"
-        x      = 0; y = 0; width = 12; height = 6
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
+          region = "us-east-1"
           title  = "ALB Request Count"
           period = 60
           stat   = "Sum"
+          view   = "timeSeries"
           metrics = [[
             "AWS/ApplicationELB",
             "RequestCount",
@@ -23,11 +28,16 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 12; y = 0; width = 12; height = 6
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
+          region = "us-east-1"
           title  = "ALB Target Response Time (p95)"
           period = 60
           stat   = "p95"
+          view   = "timeSeries"
           metrics = [[
             "AWS/ApplicationELB",
             "TargetResponseTime",
@@ -38,11 +48,16 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 0; y = 6; width = 12; height = 6
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
+          region = "us-east-1"
           title  = "SQS Queue Depth"
           period = 60
           stat   = "Maximum"
+          view   = "timeSeries"
           metrics = [[
             "AWS/SQS",
             "ApproximateNumberOfMessagesVisible",
@@ -52,11 +67,16 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 12; y = 6; width = 12; height = 6
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
         properties = {
-          title  = "Worker ECS Task Count"
+          region = "us-east-1"
+          title  = "Worker ECS Running Tasks"
           period = 60
           stat   = "Average"
+          view   = "timeSeries"
           metrics = [[
             "ECS/ContainerInsights",
             "RunningTaskCount",
@@ -67,11 +87,16 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 0; y = 12; width = 12; height = 6
+        x      = 0
+        y      = 12
+        width  = 12
+        height = 6
         properties = {
-          title  = "ALB 5xx Error Rate"
+          region = "us-east-1"
+          title  = "ALB 5xx Error Count"
           period = 60
           stat   = "Sum"
+          view   = "timeSeries"
           metrics = [[
             "AWS/ApplicationELB",
             "HTTPCode_Target_5XX_Count",
