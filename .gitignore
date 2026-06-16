@@ -215,7 +215,6 @@ reports/
 # Terraform
 terraform/envs/dev/terraform.tfvars
 terraform/envs/dev/.terraform/
-terraform/envs/dev/.terraform.lock.hcl
 *.tfplan
 *.tfstate
 *.tfstate.backup
