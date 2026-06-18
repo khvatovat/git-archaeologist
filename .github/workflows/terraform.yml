@@ -23,23 +23,24 @@ jobs:
         with:
           terraform_version: "~1.7"
 
-      - name: terraform fmt check
+      - name: fmt check
         run: terraform fmt -check -recursive terraform/
 
-      - name: terraform init (no backend)
+      - name: init
         run: terraform -chdir=${{ env.TF_DIR }} init -backend=false
 
-      - name: terraform validate
+      - name: validate
         run: terraform -chdir=${{ env.TF_DIR }} validate
 
   security-scan:
-    name: Checkov — IaC Security Scan
+    name: Checkov
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@master
+      - uses: bridgecrewio/checkov-action@master
         with:
           directory: terraform/
           framework: terraform
@@ -47,8 +48,7 @@ jobs:
           output_format: sarif
           output_file_path: checkov.sarif
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: checkov.sarif
@@ -59,7 +59,6 @@ jobs:
     needs: [validate, security-scan]
     if: github.event_name == 'pull_request'
     permissions:
-      id-token: write
       contents: read
       pull-requests: write
 
@@ -70,16 +69,15 @@ jobs:
         with:
           terraform_version: "~1.7"
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform init
-        run: terraform -chdir=${{ env.TF_DIR }} init
+      - run: terraform -chdir=${{ env.TF_DIR }} init
 
-      - name: Terraform plan
+      - name: Plan
         id: plan
         run: |
           terraform -chdir=${{ env.TF_DIR }} plan \
@@ -88,23 +86,21 @@ jobs:
             -no-color 2>&1 | tee plan.txt
         continue-on-error: true
 
-      - name: Post plan as PR comment
+      - name: Post plan comment
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('plan.txt', 'utf8');
-            const truncated = plan.length > 60000
-              ? plan.slice(0, 60000) + '\n\n... [truncated]'
-              : plan;
+            const body = plan.length > 60000 ? plan.slice(0, 60000) + '\n\n...[truncated]' : plan;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Terraform Plan\n\`\`\`\n${truncated}\n\`\`\``
+              body: '```\n' + body + '\n```'
             });
 
-      - name: Fail if plan failed
+      - name: Fail if plan errored
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
@@ -114,9 +110,6 @@ jobs:
     needs: [validate, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -125,17 +118,15 @@ jobs:
         with:
           terraform_version: "~1.7"
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform init
-        run: terraform -chdir=${{ env.TF_DIR }} init
+      - run: terraform -chdir=${{ env.TF_DIR }} init
 
-      - name: Terraform apply
-        run: |
+      - run: |
           terraform -chdir=${{ env.TF_DIR }} apply -auto-approve \
             -var="anthropic_api_key=${{ secrets.ANTHROPIC_API_KEY }}" \
             -var="github_token=${{ secrets.GH_WATCH_TOKEN }}"

@@ -8,8 +8,6 @@ from typing import Any
 
 import boto3
 
-# In the container, archaeologist modules are copied alongside this file.
-# In local dev, add the repo root to the path.
 _root = os.path.join(os.path.dirname(__file__), "..")
 if _root not in sys.path:
     sys.path.insert(0, os.path.abspath(_root))

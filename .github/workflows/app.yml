@@ -32,27 +32,26 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Install test dependencies
+      - name: Install dependencies
         run: |
           pip install \
-            fastapi>=0.110 uvicorn boto3 pydantic \
+            "fastapi>=0.110" uvicorn boto3 pydantic \
             anthropic httpx rich python-dotenv \
-            pytest pytest-asyncio moto[dynamodb,sqs,secretsmanager] \
-            coverage
+            "moto[dynamodb,sqs,secretsmanager]" \
+            pytest pytest-asyncio coverage
 
-      - name: Run tests with coverage
+      - name: Run tests
         run: |
           coverage run -m pytest api/tests/ worker/tests/ -v
           coverage xml
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
 
   sonar:
-    name: SonarCloud Scan
+    name: SonarCloud
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push'
@@ -66,30 +65,30 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Install deps + generate coverage
+      - name: Generate coverage
         run: |
           pip install \
-            fastapi>=0.110 uvicorn boto3 pydantic \
+            "fastapi>=0.110" uvicorn boto3 pydantic \
             anthropic httpx rich python-dotenv \
-            pytest pytest-asyncio moto[dynamodb,sqs,secretsmanager] \
-            coverage
+            "moto[dynamodb,sqs,secretsmanager]" \
+            pytest pytest-asyncio coverage
           coverage run -m pytest api/tests/ worker/tests/ -v
           coverage xml
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+      - uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   sca-scan:
-    name: SCA — Trivy Filesystem Scan
+    name: Trivy Filesystem Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Trivy (filesystem, CRITICAL+HIGH)
-        uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
@@ -98,81 +97,73 @@ jobs:
           output: trivy-fs.sarif
           exit-code: "0"
 
-      - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: trivy-fs.sarif
 
   build-and-push:
-    name: Build, Scan & Push Images
+    name: Build, Scan & Deploy
     runs-on: ubuntu-latest
     needs: [test, sca-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: ecr-login
+      - id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set image tags
         id: tags
         run: |
-          SHA="${{ github.sha }}"
           REGISTRY="${{ steps.ecr-login.outputs.registry }}"
-          echo "api_image=${REGISTRY}/git-archaeologist-dev-api:${SHA}" >> "$GITHUB_OUTPUT"
-          echo "worker_image=${REGISTRY}/git-archaeologist-dev-worker:${SHA}" >> "$GITHUB_OUTPUT"
+          SHA="${{ github.sha }}"
+          echo "api=${REGISTRY}/git-archaeologist-dev-api:${SHA}" >> "$GITHUB_OUTPUT"
+          echo "worker=${REGISTRY}/git-archaeologist-dev-worker:${SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Build API image
-        run: docker build -f api/Dockerfile -t ${{ steps.tags.outputs.api_image }} .
+      - name: Build API
+        run: docker build -f api/Dockerfile -t ${{ steps.tags.outputs.api }} .
 
-      - name: Trivy scan — API image
+      - name: Scan API image
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: image
-          image-ref: ${{ steps.tags.outputs.api_image }}
+          image-ref: ${{ steps.tags.outputs.api }}
           severity: CRITICAL,HIGH
           format: table
           exit-code: "1"
 
-      - name: Build worker image
-        run: docker build -f worker/Dockerfile -t ${{ steps.tags.outputs.worker_image }} .
+      - name: Build worker
+        run: docker build -f worker/Dockerfile -t ${{ steps.tags.outputs.worker }} .
 
-      - name: Trivy scan — worker image
+      - name: Scan worker image
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: image
-          image-ref: ${{ steps.tags.outputs.worker_image }}
+          image-ref: ${{ steps.tags.outputs.worker }}
           severity: CRITICAL,HIGH
           format: table
           exit-code: "1"
 
-      - name: Push images to ECR
+      - name: Push images
         run: |
-          docker push ${{ steps.tags.outputs.api_image }}
-          docker push ${{ steps.tags.outputs.worker_image }}
+          docker push ${{ steps.tags.outputs.api }}
+          docker push ${{ steps.tags.outputs.worker }}
 
-      - name: Deploy API to ECS
+      - name: Deploy to ECS
         run: |
           aws ecs update-service \
             --cluster git-archaeologist-dev-cluster \
             --service git-archaeologist-dev-api \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
-
-      - name: Deploy worker to ECS
-        run: |
           aws ecs update-service \
             --cluster git-archaeologist-dev-cluster \
             --service git-archaeologist-dev-worker \

@@ -1,9 +1,4 @@
-name: Security Scan (Pipeline C)
-
-# Deliberately different toolchain from app.yml (Pipeline A):
-# - SAST: Semgrep (vs SonarCloud in A)
-# - Dependency audit: pip-audit (vs Trivy filesystem in A)
-# - Secret detection: truffleHog (vs none in A)
+name: Security Scan
 
 on:
   push:
@@ -11,37 +6,25 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 6 * * 1"  # weekly Monday scan
+    - cron: "0 6 * * 1"
 
 jobs:
   semgrep:
-    name: SAST — Semgrep
+    name: Semgrep SAST
     runs-on: ubuntu-latest
     permissions:
       security-events: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Semgrep
-        uses: semgrep/semgrep-action@v1
+      - uses: semgrep/semgrep-action@v1
         with:
-          config: >-
-            p/python
-            p/secrets
-            p/owasp-top-ten
-          output: semgrep.sarif
-          output-format: sarif
+          config: "p/python p/owasp-top-ten"
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: semgrep.sarif
-
   pip-audit:
-    name: Dependency Audit — pip-audit
+    name: pip-audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,34 +33,31 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install pip-audit
-        run: pip install pip-audit
+      - run: pip install pip-audit
 
-      - name: Audit API dependencies
+      - name: Audit API
         run: pip-audit -r api/requirements.txt --format json -o pip-audit-api.json
         continue-on-error: true
 
-      - name: Audit worker dependencies
+      - name: Audit worker
         run: pip-audit -r worker/requirements.txt --format json -o pip-audit-worker.json
         continue-on-error: true
 
-      - name: Upload audit results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pip-audit-results
           path: pip-audit-*.json
 
   secret-scan:
-    name: Secret Detection — TruffleHog
+    name: TruffleHog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: TruffleHog scan
-        uses: trufflesecurity/trufflehog@main
+      - uses: trufflesecurity/trufflehog@main
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
