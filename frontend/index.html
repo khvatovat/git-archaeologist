@@ -52,6 +52,7 @@
   </ul>
 </div>
 
+<script src="config.js"></script>
 <script>
   const API = window.API_BASE || '';
 
@@ -102,7 +103,7 @@
       msg.textContent = 'registered successfully';
       msg.className = 'ok';
 
-      document.getElementById('wh-url').textContent = `${location.origin}${API}/webhook`;
+      document.getElementById('wh-url').textContent = `${API}/webhook`;
       document.getElementById('wh-secret').textContent = repo.webhook_secret;
       info.style.display = 'block';
 

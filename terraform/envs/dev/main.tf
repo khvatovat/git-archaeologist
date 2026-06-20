@@ -59,6 +59,13 @@ module "ecs" {
   worker_image = var.worker_image
 }
 
+module "frontend" {
+  source       = "../../modules/frontend"
+  project      = var.project
+  env          = local.env
+  alb_dns_name = module.ecs.alb_dns_name
+}
+
 module "observability" {
   source  = "../../modules/observability"
   project = var.project

@@ -51,111 +51,10 @@ resource "aws_cloudwatch_log_group" "worker" {
   retention_in_days = 14
 }
 
-# ── IAM: Shared Task Execution Role ──────────────────────────────────────────
+# ── IAM: Use pre-created LabRole (AWS Academy — iam:CreateRole is blocked) ────
 
-data "aws_iam_policy_document" "ecs_assume" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "execution" {
-  name               = "${local.name}-ecs-execution"
-  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
-}
-
-resource "aws_iam_role_policy_attachment" "execution_base" {
-  role       = aws_iam_role.execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# Allow execution role to pull secrets for task env injection
-data "aws_iam_policy_document" "execution_secrets" {
-  statement {
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.anthropic_secret_arn, var.github_token_secret_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "execution_secrets" {
-  name   = "pull-secrets"
-  role   = aws_iam_role.execution.id
-  policy = data.aws_iam_policy_document.execution_secrets.json
-}
-
-# ── IAM: API Task Role ────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "api_task" {
-  name               = "${local.name}-api-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
-}
-
-data "aws_iam_policy_document" "api_task" {
-  statement {
-    sid     = "DynamoRepos"
-    actions = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Scan", "dynamodb:Query"]
-    resources = [
-      var.repos_table_arn,
-      "${var.repos_table_arn}/index/*",
-    ]
-  }
-  statement {
-    sid     = "DynamoJobs"
-    actions = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Query"]
-    resources = [
-      var.jobs_table_arn,
-      "${var.jobs_table_arn}/index/*",
-    ]
-  }
-  statement {
-    sid       = "SQSSend"
-    actions   = ["sqs:SendMessage"]
-    resources = [var.queue_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "api_task" {
-  name   = "api-permissions"
-  role   = aws_iam_role.api_task.id
-  policy = data.aws_iam_policy_document.api_task.json
-}
-
-# ── IAM: Worker Task Role ─────────────────────────────────────────────────────
-
-resource "aws_iam_role" "worker_task" {
-  name               = "${local.name}-worker-task"
-  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
-}
-
-data "aws_iam_policy_document" "worker_task" {
-  statement {
-    sid     = "DynamoJobs"
-    actions = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
-    resources = [
-      var.jobs_table_arn,
-      "${var.jobs_table_arn}/index/*",
-    ]
-  }
-  statement {
-    sid       = "SQSConsume"
-    actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
-    resources = [var.queue_arn]
-  }
-  statement {
-    sid       = "SecretsRead"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.anthropic_secret_arn, var.github_token_secret_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "worker_task" {
-  name   = "worker-permissions"
-  role   = aws_iam_role.worker_task.id
-  policy = data.aws_iam_policy_document.worker_task.json
+data "aws_iam_role" "lab" {
+  name = "LabRole"
 }
 
 # ── ALB ───────────────────────────────────────────────────────────────────────
@@ -205,8 +104,8 @@ resource "aws_ecs_task_definition" "api" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.api_cpu
   memory                   = var.api_memory
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.api_task.arn
+  execution_role_arn       = data.aws_iam_role.lab.arn
+  task_role_arn            = data.aws_iam_role.lab.arn
 
   container_definitions = jsonencode([{
     name  = "api"
@@ -235,8 +134,8 @@ resource "aws_ecs_task_definition" "worker" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.worker_cpu
   memory                   = var.worker_memory
-  execution_role_arn       = aws_iam_role.execution.arn
-  task_role_arn            = aws_iam_role.worker_task.arn
+  execution_role_arn       = data.aws_iam_role.lab.arn
+  task_role_arn            = data.aws_iam_role.lab.arn
 
   container_definitions = jsonencode([{
     name  = "worker"

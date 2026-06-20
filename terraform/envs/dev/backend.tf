@@ -1,8 +1,6 @@
 terraform {
   backend "s3" {
-    # Fill in after running: aws s3 mb s3://YOUR-BUCKET and
-    # aws dynamodb create-table --table-name terraform-locks ...
-    bucket         = "git-archaeologist-tfstate"
+    bucket         = "git-archaeologist-tfstate-865861380894"
     key            = "dev/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "terraform-locks"
