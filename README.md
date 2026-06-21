@@ -92,12 +92,6 @@ Modules live under `terraform/modules/`, wired in `terraform/envs/dev/main.tf`.
 
 **State backend**: S3 bucket + DynamoDB lock table (see `terraform/envs/dev/backend.tf`). See setup instructions below.
 
-### Screenshots
-
-> _Add `terraform plan` output screenshot here after first plan._
-> _Add `terraform apply` completion screenshot here after first apply._
-> _Add AWS console screenshots (ECS services, DynamoDB tables, SQS queue) here._
-
 ---
 
 ## 5. CI/CD pipelines
@@ -140,14 +134,6 @@ Runs on every push to `main`, every PR, and weekly on a schedule. Uses a **diffe
 | Dependency scan | Trivy filesystem | pip-audit (CVE database) |
 | Secret detection | — | TruffleHog (verified secrets only) |
 | Output | SARIF → GitHub Security tab | SARIF → GitHub Security tab |
-
-### Screenshots
-
-> _Add green GitHub Actions run screenshot here (all three workflows)._
-> _Add Trivy scan report screenshot here._
-> _Add SonarCloud dashboard screenshot here._
-> _Add Semgrep SARIF findings screenshot here._
-> _Add Checkov report screenshot here._
 
 ---
 
@@ -228,11 +214,6 @@ Two alarms:
 - `git-archaeologist-dev-api-5xx-high` — fires when 5xx count > 10/minute for 2 minutes
 
 Worker and API logs stream to CloudWatch Logs under `/ecs/git-archaeologist-dev/{api,worker}` with 14-day retention.
-
-### Screenshots
-
-> _Add CloudWatch dashboard screenshot here._
-> _Add alarm firing screenshot here (trigger manually by stopping worker and queuing jobs)._
 
 ---
 
@@ -340,8 +321,19 @@ pytest api/tests/ worker/tests/ -v
 | `GH_WATCH_TOKEN` | GitHub PAT for the worker to call the GitHub API |
 | `SONAR_TOKEN` | SonarCloud project token |
 
-### GitLab mirror setup
+### GitLab CI/CD
 
-1. GitLab → New project → Import project → Repository by URL → paste GitHub HTTPS URL
-2. Enable "Mirror repository" with Pull direction
-3. The `.gitlab-ci.yml` is picked up automatically; no extra CI variables needed for the built-in templates
+The repository includes a `.gitlab-ci.yml` that mirrors the GitHub Actions pipelines (validate → test → security → build → deploy).
+
+Required CI/CD variables (Settings → CI/CD → Variables):
+
+| Variable | Description |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM key with ECR/ECS deploy permissions |
+| `AWS_SECRET_ACCESS_KEY` | Corresponding secret |
+| `AWS_SESSION_TOKEN` | If using temporary credentials |
+| `AWS_ACCOUNT_ID` | Used to construct the ECR registry URL |
+| `ANTHROPIC_API_KEY` | Stored in Secrets Manager by Terraform |
+| `GH_WATCH_TOKEN` | GitHub PAT for the worker |
+
+To mirror from GitHub: GitLab → New project → Import project → Repository by URL → paste the GitHub HTTPS URL, enable Pull mirroring.

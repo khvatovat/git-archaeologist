@@ -635,6 +635,17 @@
 
   async function loadRepos() {
     const container = document.getElementById('repos-container');
+
+    if (window.DEMO_REPOS) {
+      document.getElementById('stat-repos').textContent = window.DEMO_REPOS.length;
+      const grid = document.createElement('div');
+      grid.className = 'repos-grid';
+      grid.innerHTML = window.DEMO_REPOS.map(repoCard).join('');
+      container.innerHTML = '';
+      container.appendChild(grid);
+      return;
+    }
+
     try {
       const r = await fetch(`${API}/repos`);
       const data = await r.json();

@@ -1,0 +1,143 @@
+stages:
+  - validate
+  - test
+  - security
+  - build
+  - deploy
+
+variables:
+  AWS_DEFAULT_REGION: us-east-1
+  TF_DIR: terraform/envs/dev
+
+tf-validate:
+  stage: validate
+  image:
+    name: hashicorp/terraform:1.7
+    entrypoint: [""]
+  script:
+    - terraform fmt -check -recursive terraform/
+    - terraform -chdir=$TF_DIR init -backend=false
+    - terraform -chdir=$TF_DIR validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - "terraform/**"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "terraform/**"
+
+unit-tests:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install -q fastapi uvicorn boto3 pydantic anthropic httpx
+        pytest pytest-asyncio "moto[dynamodb,sqs,secretsmanager]" coverage
+    - pytest api/tests/ worker/tests/ --cov=api --cov=worker --cov-report=xml -q
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - "api/**"
+        - "worker/**"
+        - "*.py"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+semgrep:
+  stage: security
+  image: semgrep/semgrep
+  script:
+    - semgrep --config p/python --config p/owasp-top-ten
+        --sarif --output gl-sast-semgrep.sarif . || true
+  artifacts:
+    reports:
+      sast: gl-sast-semgrep.sarif
+
+pip-audit:
+  stage: security
+  image: python:3.11-slim
+  script:
+    - pip install -q pip-audit
+    - pip-audit -r api/requirements.txt
+    - pip-audit -r worker/requirements.txt
+
+trufflehog:
+  stage: security
+  image: trufflesecurity/trufflehog:latest
+  entrypoint: [""]
+  script:
+    - trufflehog git file://. --only-verified --fail
+
+checkov:
+  stage: security
+  image:
+    name: bridgecrew/checkov:latest
+    entrypoint: [""]
+  script:
+    - checkov -d terraform/ --framework terraform --soft-fail
+        --output sarif --output-file-path gl-sast-checkov.sarif || true
+  artifacts:
+    reports:
+      sast: gl-sast-checkov.sarif
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - "terraform/**"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "terraform/**"
+
+build-push-api:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - apk add --no-cache aws-cli
+    - ECR="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+    - aws ecr get-login-password --region $AWS_DEFAULT_REGION
+        | docker login --username AWS --password-stdin "$ECR"
+    - docker build -f api/Dockerfile
+        -t "${ECR}/git-archaeologist-dev-api:${CI_COMMIT_SHORT_SHA}" .
+    - docker push "${ECR}/git-archaeologist-dev-api:${CI_COMMIT_SHORT_SHA}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+
+build-push-worker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - apk add --no-cache aws-cli
+    - ECR="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+    - aws ecr get-login-password --region $AWS_DEFAULT_REGION
+        | docker login --username AWS --password-stdin "$ECR"
+    - docker build -f worker/Dockerfile
+        -t "${ECR}/git-archaeologist-dev-worker:${CI_COMMIT_SHORT_SHA}" .
+    - docker push "${ECR}/git-archaeologist-dev-worker:${CI_COMMIT_SHORT_SHA}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+
+deploy:
+  stage: deploy
+  image: python:3.11-slim
+  script:
+    - pip install -q awscli ansible boto3 botocore
+    - aws ecs update-service --cluster git-archaeologist-dev
+        --service git-archaeologist-dev-api --force-new-deployment
+    - aws ecs update-service --cluster git-archaeologist-dev
+        --service git-archaeologist-dev-worker --force-new-deployment
+    - ansible-playbook -i ansible/inventory.yml ansible/deploy.yml
+      env:
+        AWS_REGION: us-east-1
+        PROJECT: git-archaeologist
+        ENV: dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+  needs:
+    - build-push-api
+    - build-push-worker

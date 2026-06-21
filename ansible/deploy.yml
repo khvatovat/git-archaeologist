@@ -37,17 +37,23 @@
       debug:
         msg: "API healthy — status {{ health_result.status }} after {{ health_result.attempts | default(1) }} attempt(s)"
 
+    - name: Write frontend API config
+      copy:
+        content: "window.API_BASE = 'http://{{ alb_dns.stdout }}';\n"
+        dest: /tmp/git-archaeologist-config.js
+
     - name: Sync frontend files to S3
       aws_s3:
         bucket: "{{ stack_name }}-frontend"
         object: "{{ item.key }}"
-        src: "frontend/{{ item.file }}"
+        src: "{{ item.src }}"
         mode: put
         content_type: "{{ item.content_type }}"
         permission: public-read
       loop:
-        - { key: "index.html",   file: "index.html",   content_type: "text/html" }
-        - { key: "history.html", file: "history.html",  content_type: "text/html" }
+        - { key: "index.html",   src: "frontend/index.html",   content_type: "text/html" }
+        - { key: "history.html", src: "frontend/history.html",  content_type: "text/html" }
+        - { key: "config.js",    src: "/tmp/git-archaeologist-config.js", content_type: "application/javascript" }
       register: s3_result
 
     - name: Invalidate CloudFront or report S3 URL
