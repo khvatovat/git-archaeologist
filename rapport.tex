@@ -1,0 +1,376 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage{tabularx}
+
+\geometry{top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm}
+
+% ── Colors ───────────────────────────────────────────────────────────────────
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{keyword}{HTML}{0033B3}
+\definecolor{comment}{HTML}{808080}
+\definecolor{string}{HTML}{067D17}
+
+% ── Code listings ─────────────────────────────────────────────────────────────
+\lstset{
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framerule=0.5pt,
+  rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{keyword}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  stringstyle=\color{string},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=2,
+  showstringspaces=false,
+  numbers=none,
+  aboveskip=8pt,
+  belowskip=4pt,
+}
+
+% ── Headers ───────────────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{git-archaeologist — Rapport DevOps \& AWS}}
+\fancyhead[R]{\small\textit{Maria Khvatova}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section style ─────────────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries}{}{0em}{\thesection\quad}[\vspace{-4pt}\rule{\linewidth}{0.4pt}]
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{document}
+
+% ── Title page ────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries git-archaeologist\par}
+  \vspace{0.4cm}
+  {\large Service cloud d'analyse de l'historique Git par LLM\par}
+  \vspace{2cm}
+  \rule{0.5\linewidth}{0.5pt}\par
+  \vspace{1.5cm}
+  {\large Rapport de projet — DevOps \& AWS\par}
+  \vspace{0.5cm}
+  {\normalsize EPITA ING2 — 2025/2026\par}
+  \vspace{1cm}
+  {\normalsize Maria Khvatova\par}
+  \vspace{0.3cm}
+  {\normalsize \url{https://github.com/khvatovat/git-archaeologist}\par}
+  \vfill
+  {\small Juin 2026}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Présentation de l'application}
+
+\subsection{Contexte}
+
+\texttt{git-archaeologist} est d'abord un outil CLI qui analyse l'historique Git d'un fichier dans un dépôt GitHub. Pour chaque fichier, il récupère les commits et pull requests associés, les regroupe par période (\emph{ères}), génère un résumé narratif de chaque ère avec Claude Haiku, puis synthétise le tout avec Claude Sonnet pour produire un rapport lisible sur l'évolution du fichier.
+
+Ce projet transforme cet outil CLI en un service cloud hébergé sur AWS :
+
+\begin{itemize}[noitemsep]
+  \item L'utilisateur enregistre un dépôt GitHub via une interface web statique (S3).
+  \item GitHub envoie un webhook à chaque push ; l'API valide la signature HMAC-SHA256, crée une entrée dans DynamoDB et pousse un message dans SQS.
+  \item Un worker consomme la file SQS, exécute le pipeline d'analyse et écrit le résultat dans DynamoDB.
+  \item L'interface web permet de consulter les analyses par dépôt.
+\end{itemize}
+
+La logique d'analyse IA est réutilisée telle quelle depuis l'outil CLI. L'objectif du projet est l'infrastructure, l'automatisation, la sécurité et l'observabilité.
+
+\subsection{Stack applicative}
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Composant & Technologies \\
+\midrule
+API & FastAPI (Python 3.11), Uvicorn, Pydantic \\
+Worker & Python 3.11, boto3, Anthropic SDK \\
+Frontend & HTML/JS statique hébergé sur S3 \\
+LLM & Claude Haiku (résumés), Claude Sonnet (synthèse) \\
+\bottomrule
+\end{tabularx}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Architecture AWS}
+
+\subsection{Vue d'ensemble}
+
+\begin{lstlisting}
+  Internet
+     |
+  ALB (public, port 80)          -- us-east-1
+     |
+  ECS Fargate — api              -- subnet privé
+     |-- POST /repos             --> DynamoDB repos
+     |-- GET  /repos             <-- DynamoDB repos
+     |-- POST /webhook           --> DynamoDB jobs + SQS
+     |-- GET  /repos/{id}/history<-- DynamoDB jobs (GSI)
+     |
+  SQS --> ECS Fargate — worker   -- subnet privé
+               |
+          DynamoDB jobs (status, résultat)
+               |
+          Secrets Manager  --> ANTHROPIC_API_KEY
+                           --> GITHUB_TOKEN
+\end{lstlisting}
+
+\subsection{Réseau (module \texttt{network})}
+
+Le VPC couvre deux zones de disponibilité. Chaque AZ contient :
+\begin{itemize}[noitemsep]
+  \item Un \textbf{subnet public} : accueille l'ALB et la NAT Gateway.
+  \item Un \textbf{subnet privé} : accueille les tâches ECS (API et worker). Ces subnets n'ont pas de route vers l'internet gateway ; les tâches sortent via NAT.
+\end{itemize}
+
+La table de routage privée pointe vers la NAT Gateway. Une seule NAT Gateway est provisionnée (optimisation de coût acceptable en développement — en production, une par AZ garantit la résilience).
+
+\subsection{Sécurité réseau (module \texttt{security})}
+
+Trois security groups strictement délimités :
+
+\begin{tabularx}{\linewidth}{lXX}
+\toprule
+SG & Inbound & Outbound \\
+\midrule
+\texttt{alb-sg} & \texttt{0.0.0.0/0 :80} & Tout \\
+\texttt{api-sg} & \texttt{alb-sg :8080} uniquement & Tout (APIs AWS via NAT) \\
+\texttt{worker-sg} & Aucun & Tout \\
+\bottomrule
+\end{tabularx}
+
+L'API n'est jamais accessible directement depuis internet, uniquement via l'ALB. Le worker n'a aucun port ouvert en entrée.
+
+\subsection{Choix DynamoDB + SQS}
+
+\textbf{DynamoDB} est retenu parce que tous les accès sont par clé : recherche d'un job par \texttt{job\_id}, liste des jobs d'un dépôt via GSI sur \texttt{repo\_id+created\_at}, enregistrement d'un dépôt par \texttt{repo\_id}. Il n'y a pas de jointures, pas d'agrégations. Le mode \texttt{PAY\_PER\_REQUEST} rend le coût négligeable en développement. RDS apporterait de la complexité opérationnelle (backups, patches, connection pooling) sans aucun bénéfice pour ces patterns d'accès.
+
+\textbf{SQS} est retenu parce que les jobs d'analyse sont longs (de l'ordre de la minute) et naturellement asynchrones. Le pattern producteur/consommateur est exactement ce pour quoi SQS est conçu. Le \textit{visibility timeout} et la dead-letter queue (3 tentatives) gèrent les échecs sans perte de données. Step Functions serait disproportionné pour un flux à une seule étape.
+
+\subsection{IAM — principe du moindre privilège}
+
+Chaque service n'a accès qu'aux ressources dont il a strictement besoin :
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Rôle & Actions autorisées \\
+\midrule
+\texttt{api-task-role} & DynamoDB \texttt{PutItem/GetItem/Scan/Query} (repos + jobs), SQS \texttt{SendMessage} \\
+\texttt{worker-task-role} & DynamoDB \texttt{GetItem/UpdateItem} (jobs uniquement), SQS \texttt{ReceiveMessage/DeleteMessage}, Secrets Manager \texttt{GetSecretValue} \\
+\texttt{execution-role} & ECR pull, CloudWatch Logs write, Secrets Manager \texttt{GetSecretValue} (pour injection dans le container) \\
+\bottomrule
+\end{tabularx}
+
+Le worker ne peut ni lire ni écrire la table des dépôts. L'API ne peut ni lire les secrets ni toucher les champs de mise à jour du worker. Les ARN des ressources sont explicitement spécifiés dans les politiques (pas de wildcard \texttt{*} sur Resource).
+
+\subsection{Secrets Manager}
+
+La clé Anthropic et le token GitHub sont stockés dans AWS Secrets Manager. Ils sont injectés dans le container worker via le champ \texttt{secrets} de la définition de tâche ECS — pas comme variables d'environnement définies dans Terraform. Cela signifie que les valeurs n'apparaissent jamais dans l'état Terraform, dans les logs, ni dans le code source.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Infrastructure as Code — Terraform}
+
+\subsection{Structure}
+
+L'infrastructure est organisée en 7 modules indépendants, câblés dans \texttt{terraform/envs/dev/main.tf} :
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Module & Ressources créées \\
+\midrule
+\texttt{network} & VPC, 2 subnets publics, 2 subnets privés, IGW, NAT GW, tables de routage \\
+\texttt{security} & Security groups (ALB, API, worker), Secrets Manager (clé Anthropic, token GitHub) \\
+\texttt{messaging} & File SQS + dead-letter queue (redrive après 3 tentatives) \\
+\texttt{data} & Table DynamoDB \texttt{repos} (PK : \texttt{repo\_id}, GSI sur \texttt{name}), table \texttt{jobs} (PK : \texttt{job\_id}, GSI sur \texttt{repo\_id+created\_at}), SSE activé sur les deux tables \\
+\texttt{ecs} & Cluster ECS Fargate, dépôts ECR (api, worker) avec tags immuables, groupes de logs CloudWatch, rôles IAM, ALB + target group + listener, définitions de tâches, services ECS \\
+\texttt{frontend} & Bucket S3 (site statique), politique publique en lecture, upload des fichiers HTML et \texttt{config.js} \\
+\texttt{observability} & Dashboard CloudWatch (5 widgets), 2 alarmes (profondeur de file, taux 5xx) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Backend d'état}
+
+L'état Terraform est stocké dans un bucket S3 avec versioning activé. Le verrouillage des opérations concurrentes est assuré par une table DynamoDB (\texttt{terraform-locks}). Cela permet l'exécution du pipeline CI/CD sans risque de corruption de l'état.
+
+\subsection{Choix ECS Fargate vs alternatives}
+
+ECS Fargate a été retenu plutôt qu'EC2 ou Lambda pour les raisons suivantes :
+\begin{itemize}[noitemsep]
+  \item \textbf{EC2 + Auto Scaling} : nécessite de gérer les AMI, les patches OS, le placement des instances. La charge de travail ne justifie pas cette complexité.
+  \item \textbf{Lambda} : la limite d'exécution à 15 minutes est incompatible avec les jobs d'analyse qui peuvent durer plusieurs minutes selon la taille du dépôt. La gestion des dépendances (Anthropic SDK, boto3) serait aussi plus lourde via Lambda layers.
+  \item \textbf{ECS Fargate} : pas de gestion de serveurs, facturation à la seconde, isolation des containers, intégration native avec CloudWatch Logs, Secrets Manager et SQS.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{CI/CD — GitHub Actions}
+
+Trois workflows indépendants sont mis en place, chacun avec un périmètre différent.
+
+\subsection{Pipeline A — Application (\texttt{app.yml})}
+
+Déclenché sur push ou pull request vers \texttt{main}, uniquement si des fichiers sous \texttt{api/}, \texttt{worker/} ou des fichiers \texttt{.py} à la racine ont changé.
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Unit Tests} : \texttt{pytest api/tests/ worker/tests/} avec \texttt{coverage}. Les dépendances AWS sont mockées avec \texttt{moto} pour éviter tout appel réel à l'environnement.
+  \item \textbf{SonarCloud} : analyse de qualité de code (sur push vers \texttt{main} uniquement), avec upload du rapport de couverture.
+  \item \textbf{Trivy Filesystem Scan} : scan des vulnérabilités CRITICAL et HIGH sur le système de fichiers. Résultats en SARIF.
+  \item \textbf{Build, Scan \& Deploy} (push vers \texttt{main} uniquement) :
+    \begin{itemize}[noitemsep]
+      \item Build de l'image Docker API → scan Trivy de l'image → push vers ECR
+      \item Build de l'image Docker worker → scan Trivy → push vers ECR
+      \item \texttt{aws ecs update-service --force-new-deployment} sur les deux services
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Pipeline B — Infrastructure (\texttt{terraform.yml})}
+
+Déclenché uniquement si des fichiers sous \texttt{terraform/} ont changé.
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Format \& Validate} : \texttt{terraform fmt -check} et \texttt{terraform validate}. Bloque le merge si le code n'est pas formaté.
+  \item \textbf{Checkov} : scan de sécurité de la configuration IaC (règles terraform). Résultats en SARIF.
+  \item \textbf{Terraform Plan} (pull requests uniquement) : génère le plan et le publie en commentaire sur la PR. Permet la revue manuelle avant merge.
+  \item \textbf{Terraform Apply} (push vers \texttt{main} uniquement) : \texttt{apply -auto-approve} avec les variables sensibles injectées depuis les secrets GitHub.
+  \item \textbf{Ansible Post-Deploy} : après l'apply, un playbook Ansible attend que le health check de l'API réponde, synchronise les fichiers frontend vers S3, et soumet un job de test pour valider la chaîne complète.
+\end{enumerate}
+
+\subsection{Pipeline C — Sécurité (\texttt{security.yml})}
+
+Déclenché sur chaque push vers \texttt{main}, chaque PR, et hebdomadairement (lundi 6h UTC).
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Semgrep SAST} : analyse statique avec les règles \texttt{p/python} et \texttt{p/owasp-top-ten}. Couvre Python, Terraform, Dockerfile, YAML. Bloquant sur les findings critiques.
+  \item \textbf{pip-audit} : scan des dépendances Python contre la base de données CVE. Exécuté séparément sur \texttt{api/requirements.txt} et \texttt{worker/requirements.txt}.
+  \item \textbf{TruffleHog} : scan de l'historique Git complet pour détecter des secrets committés par erreur. Mode \texttt{--only-verified} pour limiter les faux positifs.
+\end{enumerate}
+
+\subsection{Couverture des outils de sécurité}
+
+\begin{tabularx}{\linewidth}{llX}
+\toprule
+Outil & Pipeline & Couverture \\
+\midrule
+Semgrep & C & SAST Python + IaC, règles OWASP Top 10 \\
+Checkov & B & Mauvaises configurations Terraform (chiffrement, IAM, réseau) \\
+Trivy & A & Vulnérabilités CVE sur filesystem et images Docker \\
+TruffleHog & C & Détection de secrets dans l'historique Git \\
+pip-audit & C & CVE dans les dépendances Python \\
+SonarCloud & A & Qualité de code, dette technique, couverture de tests \\
+\bottomrule
+\end{tabularx}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Automatisation — Ansible}
+
+Ansible est utilisé en post-déploiement pour valider que l'infrastructure est opérationnelle et pour synchroniser les assets statiques. Le playbook (\texttt{ansible/deploy.yml}) s'exécute en local sur le runner GitHub Actions après \texttt{terraform apply} :
+
+\begin{enumerate}[noitemsep]
+  \item Récupère le DNS de l'ALB via \texttt{terraform output}.
+  \item Attend le passage du health check \texttt{GET /health} avec retry (10 tentatives, 15 secondes d'intervalle).
+  \item Synchronise les fichiers HTML du frontend vers le bucket S3.
+  \item Soumet un job de test via \texttt{POST /jobs} pour valider la chaîne API → SQS → worker.
+\end{enumerate}
+
+Ce choix permet de ne pas dupliquer la logique de déploiement des assets dans Terraform et de disposer d'une validation fonctionnelle automatisée après chaque déploiement.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Observabilité}
+
+\subsection{Logs}
+
+Les logs de l'API et du worker sont streamés vers CloudWatch Logs via le driver \texttt{awslogs} configuré dans les définitions de tâches ECS :
+
+\begin{itemize}[noitemsep]
+  \item \texttt{/ecs/git-archaeologist-dev/api}
+  \item \texttt{/ecs/git-archaeologist-dev/worker}
+\end{itemize}
+
+Rétention fixée à 14 jours. Cela couvre le debugging opérationnel sans coût de stockage excessif.
+
+\subsection{Dashboard CloudWatch}
+
+Un dashboard centralise 5 métriques clés :
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Widget & Métrique \\
+\midrule
+ALB Request Count & Nombre de requêtes par minute (SUM) \\
+ALB Response Time p95 & Latence au 95e percentile \\
+SQS Queue Depth & Messages visibles dans la file (backlog de jobs) \\
+Worker Task Count & Tâches ECS en cours d'exécution (Container Insights) \\
+ALB 5xx Error Count & Erreurs serveur par minute (SUM) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Alarmes}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{queue-depth-high} : file SQS $>$ 20 messages pendant 2 minutes consécutives → le worker est bloqué ou sous-dimensionné.
+  \item \textbf{api-5xx-high} : $>$ 10 erreurs 5xx/minute pendant 2 minutes → problème applicatif ou infrastructure.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Limites connues et pistes d'amélioration}
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Limite & Mitigation en production \\
+\midrule
+NAT Gateway unique (point de défaillance sur la sortie privée) & Une NAT GW par AZ \\
+ALB en HTTP uniquement (pas de TLS) & Certificat ACM + listener HTTPS + redirection HTTP→HTTPS \\
+Worker non scalable automatiquement & ECS Application Auto Scaling sur la métrique de profondeur de file \\
+Credentials AWS Academy expirés à chaque session & OIDC federation (pas de secrets statiques dans GitHub) \\
+Tags ECR immuables avec SHA de commit & Le pipeline doit passer \texttt{-var=api\_image=\$SHA} à \texttt{terraform apply} \\
+Pas d'authentification sur l'API & API Gateway + Cognito ou clé API ; le secret webhook est la seule protection actuelle \\
+\bottomrule
+\end{tabularx}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Estimation des coûts (environnement dev)}
+
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Ressource & Coût mensuel estimé \\
+\midrule
+ECS Fargate — API (0,25 vCPU / 0,5 GB, 1 tâche) & \$6 \\
+ECS Fargate — Worker (0,5 vCPU / 1 GB, 1 tâche) & \$11 \\
+NAT Gateway (1, trafic minimal) & \$35 \\
+ALB & \$16 \\
+Secrets Manager (2 secrets) & \$0,80 \\
+CloudWatch (logs + dashboard) & \$3 \\
+DynamoDB + SQS (trafic dev) & $<$ \$1 \\
+\midrule
+\textbf{Total} & \textbf{\textasciitilde\$73/mois} \\
+\bottomrule
+\end{tabularx}
+
+La NAT Gateway représente la majorité du coût. C'est une contrainte structurelle d'AWS : chaque heure d'existence est facturée, indépendamment du trafic. En production, on la remplacerait en partie par des VPC Endpoints (S3, DynamoDB, SQS, Secrets Manager) pour réduire le trafic qui la traverse.
+
+\end{document}
