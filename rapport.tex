@@ -5,60 +5,31 @@
 \usepackage[french]{babel}
 \usepackage{geometry}
 \usepackage[hidelinks]{hyperref}
-\usepackage{listings}
-\usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{enumitem}
 \usepackage{titlesec}
 \usepackage{fancyhdr}
 \usepackage{parskip}
-\usepackage{microtype}
 \usepackage{array}
 \usepackage{tabularx}
+\usepackage{lmodern}
 
 \geometry{top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm}
 
-% ── Colors ───────────────────────────────────────────────────────────────────
-\definecolor{codebg}{HTML}{F5F5F5}
-\definecolor{codeframe}{HTML}{CCCCCC}
-\definecolor{keyword}{HTML}{0033B3}
-\definecolor{comment}{HTML}{808080}
-\definecolor{string}{HTML}{067D17}
-
-% ── Code listings ─────────────────────────────────────────────────────────────
-\lstset{
-  backgroundcolor=\color{codebg},
-  frame=single,
-  framerule=0.5pt,
-  rulecolor=\color{codeframe},
-  basicstyle=\ttfamily\small,
-  keywordstyle=\color{keyword}\bfseries,
-  commentstyle=\color{comment}\itshape,
-  stringstyle=\color{string},
-  breaklines=true,
-  breakatwhitespace=true,
-  tabsize=2,
-  showstringspaces=false,
-  numbers=none,
-  aboveskip=8pt,
-  belowskip=4pt,
-}
-
-% ── Headers ───────────────────────────────────────────────────────────────────
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{git-archaeologist — Rapport DevOps \& AWS}}
+\fancyhead[L]{\small\textit{git-archaeologist -- Rapport DevOps \& AWS}}
 \fancyhead[R]{\small\textit{Maria Khvatova}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
-% ── Section style ─────────────────────────────────────────────────────────────
-\titleformat{\section}{\large\bfseries}{}{0em}{\thesection\quad}[\vspace{-4pt}\rule{\linewidth}{0.4pt}]
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}[\vspace{-4pt}\rule{\linewidth}{0.4pt}]
 \titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
 \setlength{\parskip}{6pt}
 \setlength{\parindent}{0pt}
 
-% ─────────────────────────────────────────────────────────────────────────────
+\newcommand{\code}[1]{\texttt{#1}}
 
 \begin{document}
 
@@ -67,18 +38,18 @@
   \centering
   \vspace*{3cm}
   {\Huge\bfseries git-archaeologist\par}
-  \vspace{0.4cm}
+  \vspace{0.5cm}
   {\large Service cloud d'analyse de l'historique Git par LLM\par}
   \vspace{2cm}
   \rule{0.5\linewidth}{0.5pt}\par
   \vspace{1.5cm}
-  {\large Rapport de projet — DevOps \& AWS\par}
+  {\large Rapport de projet -- DevOps \& AWS\par}
   \vspace{0.5cm}
-  {\normalsize EPITA ING2 — 2025/2026\par}
+  {\normalsize EPITA ING2 -- 2025/2026\par}
   \vspace{1cm}
   {\normalsize Maria Khvatova\par}
   \vspace{0.3cm}
-  {\normalsize \url{https://github.com/khvatovat/git-archaeologist}\par}
+  {\small \url{https://github.com/khvatovat/git-archaeologist}\par}
   \vfill
   {\small Juin 2026}
 \end{titlepage}
@@ -87,22 +58,22 @@
 \newpage
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Présentation de l'application}
+\section{Presentation de l'application}
 
 \subsection{Contexte}
 
-\texttt{git-archaeologist} est d'abord un outil CLI qui analyse l'historique Git d'un fichier dans un dépôt GitHub. Pour chaque fichier, il récupère les commits et pull requests associés, les regroupe par période (\emph{ères}), génère un résumé narratif de chaque ère avec Claude Haiku, puis synthétise le tout avec Claude Sonnet pour produire un rapport lisible sur l'évolution du fichier.
+\code{git-archaeologist} est un outil d'analyse de l'historique Git d'un fichier dans un depot GitHub. Pour chaque fichier analyse, il recupere les commits et pull requests associes, les regroupe par periode (appel\'{e}es \textit{eres}), g\'{e}n\`{e}re un r\'{e}sum\'{e} narratif de chaque \`{e}re avec Claude Haiku, puis synth\'{e}tise l'ensemble avec Claude Sonnet pour produire un rapport lisible sur l'\'{e}volution du fichier.
 
-Ce projet transforme cet outil CLI en un service cloud hébergé sur AWS :
+Ce projet transforme cet outil CLI en service cloud h\'{e}berg\'{e} sur AWS~:
 
 \begin{itemize}[noitemsep]
-  \item L'utilisateur enregistre un dépôt GitHub via une interface web statique (S3).
-  \item GitHub envoie un webhook à chaque push ; l'API valide la signature HMAC-SHA256, crée une entrée dans DynamoDB et pousse un message dans SQS.
-  \item Un worker consomme la file SQS, exécute le pipeline d'analyse et écrit le résultat dans DynamoDB.
-  \item L'interface web permet de consulter les analyses par dépôt.
+  \item L'utilisateur enregistre un d\'{e}pot GitHub via une interface web statique (S3).
+  \item GitHub envoie un webhook \`{a} chaque push~; l'API valide la signature HMAC-SHA256, cr\'{e}e une entr\'{e}e dans DynamoDB et pousse un message dans SQS.
+  \item Un worker consomme la file SQS, ex\'{e}cute le pipeline d'analyse et \'{e}crit le r\'{e}sultat dans DynamoDB.
+  \item L'interface web permet de consulter les analyses par d\'{e}pot.
 \end{itemize}
 
-La logique d'analyse IA est réutilisée telle quelle depuis l'outil CLI. L'objectif du projet est l'infrastructure, l'automatisation, la sécurité et l'observabilité.
+La logique d'analyse IA est r\'{e}utilis\'{e}e telle quelle depuis l'outil CLI. L'objectif du projet est l'infrastructure, l'automatisation, la s\'{e}curit\'{e} et l'observabilit\'{e}.
 
 \subsection{Stack applicative}
 
@@ -112,8 +83,9 @@ Composant & Technologies \\
 \midrule
 API & FastAPI (Python 3.11), Uvicorn, Pydantic \\
 Worker & Python 3.11, boto3, Anthropic SDK \\
-Frontend & HTML/JS statique hébergé sur S3 \\
-LLM & Claude Haiku (résumés), Claude Sonnet (synthèse) \\
+Frontend & HTML/JS statique heberg\'{e} sur S3 \\
+LLM & Claude Haiku (r\'{e}sum\'{e}s d'eres), Claude Sonnet (synth\`{e}se) \\
+Tests & pytest, moto (mock AWS), coverage \\
 \bottomrule
 \end{tabularx}
 
@@ -122,209 +94,196 @@ LLM & Claude Haiku (résumés), Claude Sonnet (synthèse) \\
 
 \subsection{Vue d'ensemble}
 
-\begin{lstlisting}
+\begin{verbatim}
   Internet
      |
-  ALB (public, port 80)          -- us-east-1
+  ALB (public, port 80)              us-east-1
      |
-  ECS Fargate — api              -- subnet privé
-     |-- POST /repos             --> DynamoDB repos
-     |-- GET  /repos             <-- DynamoDB repos
-     |-- POST /webhook           --> DynamoDB jobs + SQS
-     |-- GET  /repos/{id}/history<-- DynamoDB jobs (GSI)
+  ECS Fargate -- api           (subnet prive)
+     |-- POST /repos            --> DynamoDB repos
+     |-- GET  /repos            <-- DynamoDB repos
+     |-- POST /webhook          --> DynamoDB jobs + SQS
+     |-- GET  /repos/{id}/history  <-- DynamoDB jobs (GSI)
      |
-  SQS --> ECS Fargate — worker   -- subnet privé
+  SQS --> ECS Fargate -- worker  (subnet prive)
                |
-          DynamoDB jobs (status, résultat)
+          DynamoDB jobs   (statut, resultat)
                |
-          Secrets Manager  --> ANTHROPIC_API_KEY
-                           --> GITHUB_TOKEN
-\end{lstlisting}
+          Secrets Manager --> ANTHROPIC_API_KEY
+                          --> GITHUB_TOKEN
+\end{verbatim}
 
-\subsection{Réseau (module \texttt{network})}
+\subsection{Reseau (module \code{network})}
 
-Le VPC couvre deux zones de disponibilité. Chaque AZ contient :
-\begin{itemize}[noitemsep]
-  \item Un \textbf{subnet public} : accueille l'ALB et la NAT Gateway.
-  \item Un \textbf{subnet privé} : accueille les tâches ECS (API et worker). Ces subnets n'ont pas de route vers l'internet gateway ; les tâches sortent via NAT.
-\end{itemize}
+Le VPC couvre deux zones de disponibilit\'{e}. Chaque AZ contient un subnet public (ALB, NAT Gateway) et un subnet priv\'{e} (t\^{a}ches ECS). Les subnets priv\'{e}s n'ont pas de route vers l'Internet Gateway~; le trafic sortant passe par la NAT Gateway. Une seule NAT Gateway est provisionn\'{e}e (optimisation de co\^{u}t acceptable en d\'{e}veloppement~; en production, une par AZ garantit la r\'{e}silience).
 
-La table de routage privée pointe vers la NAT Gateway. Une seule NAT Gateway est provisionnée (optimisation de coût acceptable en développement — en production, une par AZ garantit la résilience).
+\subsection{S\'{e}curit\'{e} r\'{e}seau (module \code{security})}
 
-\subsection{Sécurité réseau (module \texttt{security})}
-
-Trois security groups strictement délimités :
+Trois security groups strictement d\'{e}limit\'{e}s~:
 
 \begin{tabularx}{\linewidth}{lXX}
 \toprule
-SG & Inbound & Outbound \\
+Security group & Inbound & Outbound \\
 \midrule
-\texttt{alb-sg} & \texttt{0.0.0.0/0 :80} & Tout \\
-\texttt{api-sg} & \texttt{alb-sg :8080} uniquement & Tout (APIs AWS via NAT) \\
-\texttt{worker-sg} & Aucun & Tout \\
+\code{alb-sg} & \code{0.0.0.0/0 :80} & Tout \\
+\code{api-sg} & \code{alb-sg :8080} uniquement & Tout (APIs AWS via NAT) \\
+\code{worker-sg} & Aucun & Tout \\
 \bottomrule
 \end{tabularx}
 
-L'API n'est jamais accessible directement depuis internet, uniquement via l'ALB. Le worker n'a aucun port ouvert en entrée.
+L'API n'est jamais accessible directement depuis internet, uniquement via l'ALB. Le worker n'a aucun port ouvert en entr\'{e}e.
 
-\subsection{Choix DynamoDB + SQS}
+\subsection{Pourquoi DynamoDB et SQS}
 
-\textbf{DynamoDB} est retenu parce que tous les accès sont par clé : recherche d'un job par \texttt{job\_id}, liste des jobs d'un dépôt via GSI sur \texttt{repo\_id+created\_at}, enregistrement d'un dépôt par \texttt{repo\_id}. Il n'y a pas de jointures, pas d'agrégations. Le mode \texttt{PAY\_PER\_REQUEST} rend le coût négligeable en développement. RDS apporterait de la complexité opérationnelle (backups, patches, connection pooling) sans aucun bénéfice pour ces patterns d'accès.
+\textbf{DynamoDB} est retenu car tous les acc\`{e}s sont par cl\'{e}~: recherche d'un job par \code{job\_id}, liste des jobs d'un d\'{e}pot via GSI sur \code{repo\_id+created\_at}, enregistrement d'un d\'{e}pot par \code{repo\_id}. Il n'y a pas de jointures ni d'agr\'{e}gations. Le mode \code{PAY\_PER\_REQUEST} rend le co\^{u}t n\'{e}gligeable en d\'{e}veloppement. RDS apporterait une complexit\'{e} op\'{e}rationnelle (backups, patches, connection pooling) sans aucun b\'{e}n\'{e}fice pour ces patterns d'acc\`{e}s.
 
-\textbf{SQS} est retenu parce que les jobs d'analyse sont longs (de l'ordre de la minute) et naturellement asynchrones. Le pattern producteur/consommateur est exactement ce pour quoi SQS est conçu. Le \textit{visibility timeout} et la dead-letter queue (3 tentatives) gèrent les échecs sans perte de données. Step Functions serait disproportionné pour un flux à une seule étape.
+\textbf{SQS} est retenu car les jobs d'analyse sont longs (de l'ordre de la minute) et naturellement asynchrones. Le pattern producteur/consommateur est exactement le cas d'usage de SQS. Le \textit{visibility timeout} et la dead-letter queue (3 tentatives) g\`{e}rent les \'{e}checs sans perte de donn\'{e}es. Step Functions serait disproportionn\'{e} pour un flux \`{a} une seule \'{e}tape.
 
-\subsection{IAM — principe du moindre privilège}
+\subsection{IAM -- principe du moindre privil\`{e}ge}
 
-Chaque service n'a accès qu'aux ressources dont il a strictement besoin :
+Chaque service n'a acc\`{e}s qu'aux ressources dont il a strictement besoin~:
 
 \begin{tabularx}{\linewidth}{lX}
 \toprule
-Rôle & Actions autorisées \\
+R\^{o}le & Actions autoris\'{e}es \\
 \midrule
-\texttt{api-task-role} & DynamoDB \texttt{PutItem/GetItem/Scan/Query} (repos + jobs), SQS \texttt{SendMessage} \\
-\texttt{worker-task-role} & DynamoDB \texttt{GetItem/UpdateItem} (jobs uniquement), SQS \texttt{ReceiveMessage/DeleteMessage}, Secrets Manager \texttt{GetSecretValue} \\
-\texttt{execution-role} & ECR pull, CloudWatch Logs write, Secrets Manager \texttt{GetSecretValue} (pour injection dans le container) \\
+\code{api-task-role} & DynamoDB \code{PutItem/GetItem/Scan/Query} (repos + jobs), SQS \code{SendMessage} \\
+\code{worker-task-role} & DynamoDB \code{GetItem/UpdateItem} (jobs uniquement), SQS \code{ReceiveMessage/Delete\-Message}, Secrets Manager \code{GetSecretValue} \\
+\code{execution-role} & ECR pull, CloudWatch Logs write, Secrets Manager \code{GetSecretValue} (injection dans le container) \\
 \bottomrule
 \end{tabularx}
 
-Le worker ne peut ni lire ni écrire la table des dépôts. L'API ne peut ni lire les secrets ni toucher les champs de mise à jour du worker. Les ARN des ressources sont explicitement spécifiés dans les politiques (pas de wildcard \texttt{*} sur Resource).
+Le worker ne peut ni lire ni \'{e}crire la table des d\'{e}pots. L'API ne peut ni lire les secrets ni acc\'{e}der aux champs de mise \`{a} jour du worker. Les ARN des ressources sont explicitement sp\'{e}cifi\'{e}s dans les politiques (pas de wildcard \code{*} sur \code{Resource}).
 
 \subsection{Secrets Manager}
 
-La clé Anthropic et le token GitHub sont stockés dans AWS Secrets Manager. Ils sont injectés dans le container worker via le champ \texttt{secrets} de la définition de tâche ECS — pas comme variables d'environnement définies dans Terraform. Cela signifie que les valeurs n'apparaissent jamais dans l'état Terraform, dans les logs, ni dans le code source.
+La cl\'{e} Anthropic et le token GitHub sont stock\'{e}s dans AWS Secrets Manager. Ils sont inject\'{e}s dans le container worker via le champ \code{secrets} de la d\'{e}finition de t\^{a}che ECS, pas comme variables d'environnement d\'{e}finies dans Terraform. Les valeurs n'apparaissent donc ni dans l'\'{e}tat Terraform, ni dans les logs, ni dans le code source.
+
+\subsection{V\'{e}rification de signature webhook}
+
+Chaque webhook GitHub entrant est v\'{e}rifi\'{e} par HMAC-SHA256 avec le secret par d\'{e}pot stock\'{e} dans DynamoDB. La comparaison utilise \code{hmac.compare\_digest} pour pr\'{e}venir les attaques temporelles. Les requ\^{e}tes qui \'{e}chouent la v\'{e}rification retournent HTTP 401 avant toute \'{e}criture DynamoDB.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Infrastructure as Code — Terraform}
+\section{Infrastructure as Code -- Terraform}
 
-\subsection{Structure}
+\subsection{Structure modulaire}
 
-L'infrastructure est organisée en 7 modules indépendants, câblés dans \texttt{terraform/envs/dev/main.tf} :
+L'infrastructure est organis\'{e}e en 7 modules ind\'{e}pendants, c\^{a}bl\'{e}s dans \code{terraform/envs/dev/main.tf}~:
 
 \begin{tabularx}{\linewidth}{lX}
 \toprule
-Module & Ressources créées \\
+Module & Ressources cr\'{e}\'{e}es \\
 \midrule
-\texttt{network} & VPC, 2 subnets publics, 2 subnets privés, IGW, NAT GW, tables de routage \\
-\texttt{security} & Security groups (ALB, API, worker), Secrets Manager (clé Anthropic, token GitHub) \\
-\texttt{messaging} & File SQS + dead-letter queue (redrive après 3 tentatives) \\
-\texttt{data} & Table DynamoDB \texttt{repos} (PK : \texttt{repo\_id}, GSI sur \texttt{name}), table \texttt{jobs} (PK : \texttt{job\_id}, GSI sur \texttt{repo\_id+created\_at}), SSE activé sur les deux tables \\
-\texttt{ecs} & Cluster ECS Fargate, dépôts ECR (api, worker) avec tags immuables, groupes de logs CloudWatch, rôles IAM, ALB + target group + listener, définitions de tâches, services ECS \\
-\texttt{frontend} & Bucket S3 (site statique), politique publique en lecture, upload des fichiers HTML et \texttt{config.js} \\
-\texttt{observability} & Dashboard CloudWatch (5 widgets), 2 alarmes (profondeur de file, taux 5xx) \\
+\code{network} & VPC, 2 subnets publics, 2 subnets priv\'{e}s, IGW, NAT Gateway, tables de routage \\
+\code{security} & Security groups (ALB, API, worker), Secrets Manager (cl\'{e} Anthropic, token GitHub) \\
+\code{messaging} & File SQS + dead-letter queue (redrive apr\`{e}s 3 tentatives) \\
+\code{data} & Tables DynamoDB \code{repos} et \code{jobs} avec chiffrement SSE activ\'{e}, index secondaires globaux \\
+\code{ecs} & Cluster ECS Fargate, d\'{e}p\^{o}ts ECR (tags immuables), groupes de logs CloudWatch, r\^{o}les IAM, ALB, d\'{e}finitions de t\^{a}ches et services \\
+\code{frontend} & Bucket S3 (site statique), politique publique en lecture, upload des fichiers HTML \\
+\code{observability} & Dashboard CloudWatch (5 widgets), 2 alarmes \\
 \bottomrule
 \end{tabularx}
 
-\subsection{Backend d'état}
+\subsection{Backend d'\'{e}tat}
 
-L'état Terraform est stocké dans un bucket S3 avec versioning activé. Le verrouillage des opérations concurrentes est assuré par une table DynamoDB (\texttt{terraform-locks}). Cela permet l'exécution du pipeline CI/CD sans risque de corruption de l'état.
+L'\'{e}tat Terraform est stock\'{e} dans un bucket S3 avec versioning activ\'{e}. Le verrouillage est assur\'{e} par une table DynamoDB (\code{terraform-locks}), ce qui permet l'ex\'{e}cution du pipeline CI/CD sans risque de corruption de l'\'{e}tat.
 
-\subsection{Choix ECS Fargate vs alternatives}
+\subsection{Choix ECS Fargate}
 
-ECS Fargate a été retenu plutôt qu'EC2 ou Lambda pour les raisons suivantes :
+ECS Fargate a \'{e}t\'{e} retenu plut\^{o}t qu'EC2 ou Lambda~:
+
 \begin{itemize}[noitemsep]
-  \item \textbf{EC2 + Auto Scaling} : nécessite de gérer les AMI, les patches OS, le placement des instances. La charge de travail ne justifie pas cette complexité.
-  \item \textbf{Lambda} : la limite d'exécution à 15 minutes est incompatible avec les jobs d'analyse qui peuvent durer plusieurs minutes selon la taille du dépôt. La gestion des dépendances (Anthropic SDK, boto3) serait aussi plus lourde via Lambda layers.
-  \item \textbf{ECS Fargate} : pas de gestion de serveurs, facturation à la seconde, isolation des containers, intégration native avec CloudWatch Logs, Secrets Manager et SQS.
+  \item \textbf{EC2 + Auto Scaling}~: n\'{e}cessite de g\'{e}rer les AMI, patches OS et placement d'instances. La charge ne justifie pas cette complexit\'{e}.
+  \item \textbf{Lambda}~: la limite d'ex\'{e}cution \`{a} 15 minutes est incompatible avec les jobs d'analyse qui peuvent durer plusieurs minutes selon la taille du d\'{e}pot. La gestion des d\'{e}pendances (Anthropic SDK, boto3) via Lambda layers serait aussi plus lourde.
+  \item \textbf{ECS Fargate}~: pas de gestion de serveurs, facturation \`{a} la seconde, isolation native des containers, int\'{e}gration directe avec CloudWatch Logs, Secrets Manager et SQS.
 \end{itemize}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{CI/CD — GitHub Actions}
+\section{CI/CD -- GitHub Actions}
 
-Trois workflows indépendants sont mis en place, chacun avec un périmètre différent.
+Trois workflows ind\'{e}pendants sont mis en place, chacun avec un p\'{e}rim\`{e}tre diff\'{e}rent.
 
-\subsection{Pipeline A — Application (\texttt{app.yml})}
+\subsection{Pipeline A -- Application (\code{app.yml})}
 
-Déclenché sur push ou pull request vers \texttt{main}, uniquement si des fichiers sous \texttt{api/}, \texttt{worker/} ou des fichiers \texttt{.py} à la racine ont changé.
-
-\begin{enumerate}[noitemsep]
-  \item \textbf{Unit Tests} : \texttt{pytest api/tests/ worker/tests/} avec \texttt{coverage}. Les dépendances AWS sont mockées avec \texttt{moto} pour éviter tout appel réel à l'environnement.
-  \item \textbf{SonarCloud} : analyse de qualité de code (sur push vers \texttt{main} uniquement), avec upload du rapport de couverture.
-  \item \textbf{Trivy Filesystem Scan} : scan des vulnérabilités CRITICAL et HIGH sur le système de fichiers. Résultats en SARIF.
-  \item \textbf{Build, Scan \& Deploy} (push vers \texttt{main} uniquement) :
-    \begin{itemize}[noitemsep]
-      \item Build de l'image Docker API → scan Trivy de l'image → push vers ECR
-      \item Build de l'image Docker worker → scan Trivy → push vers ECR
-      \item \texttt{aws ecs update-service --force-new-deployment} sur les deux services
-    \end{itemize}
-\end{enumerate}
-
-\subsection{Pipeline B — Infrastructure (\texttt{terraform.yml})}
-
-Déclenché uniquement si des fichiers sous \texttt{terraform/} ont changé.
+D\'{e}clench\'{e} sur push ou pull request vers \code{main}, uniquement si des fichiers sous \code{api/}, \code{worker/} ou des \code{*.py} \`{a} la racine ont chang\'{e}.
 
 \begin{enumerate}[noitemsep]
-  \item \textbf{Format \& Validate} : \texttt{terraform fmt -check} et \texttt{terraform validate}. Bloque le merge si le code n'est pas formaté.
-  \item \textbf{Checkov} : scan de sécurité de la configuration IaC (règles terraform). Résultats en SARIF.
-  \item \textbf{Terraform Plan} (pull requests uniquement) : génère le plan et le publie en commentaire sur la PR. Permet la revue manuelle avant merge.
-  \item \textbf{Terraform Apply} (push vers \texttt{main} uniquement) : \texttt{apply -auto-approve} avec les variables sensibles injectées depuis les secrets GitHub.
-  \item \textbf{Ansible Post-Deploy} : après l'apply, un playbook Ansible attend que le health check de l'API réponde, synchronise les fichiers frontend vers S3, et soumet un job de test pour valider la chaîne complète.
+  \item \textbf{Unit Tests}~: \code{pytest api/tests/ worker/tests/} avec \code{coverage}. Les d\'{e}pendances AWS sont mock\'{e}es avec \code{moto} (DynamoDB, SQS, Secrets Manager).
+  \item \textbf{SonarCloud}~: analyse de qualit\'{e} de code avec upload du rapport de couverture (push vers \code{main} uniquement).
+  \item \textbf{Trivy Filesystem Scan}~: scan des vuln\'{e}rabilit\'{e}s CRITICAL et HIGH sur le syst\`{e}me de fichiers, r\'{e}sultats en SARIF.
+  \item \textbf{Build, Scan \& Deploy} (push vers \code{main} uniquement)~: build Docker API, scan Trivy de l'image, push ECR~; idem pour le worker~; puis \code{ecs update-service --force-new-deployment} sur les deux services.
 \end{enumerate}
 
-\subsection{Pipeline C — Sécurité (\texttt{security.yml})}
+\subsection{Pipeline B -- Infrastructure (\code{terraform.yml})}
 
-Déclenché sur chaque push vers \texttt{main}, chaque PR, et hebdomadairement (lundi 6h UTC).
+D\'{e}clench\'{e} uniquement si des fichiers sous \code{terraform/} ont chang\'{e}.
 
 \begin{enumerate}[noitemsep]
-  \item \textbf{Semgrep SAST} : analyse statique avec les règles \texttt{p/python} et \texttt{p/owasp-top-ten}. Couvre Python, Terraform, Dockerfile, YAML. Bloquant sur les findings critiques.
-  \item \textbf{pip-audit} : scan des dépendances Python contre la base de données CVE. Exécuté séparément sur \texttt{api/requirements.txt} et \texttt{worker/requirements.txt}.
-  \item \textbf{TruffleHog} : scan de l'historique Git complet pour détecter des secrets committés par erreur. Mode \texttt{--only-verified} pour limiter les faux positifs.
+  \item \textbf{Format \& Validate}~: \code{terraform fmt -check} et \code{terraform validate}.
+  \item \textbf{Checkov}~: scan de s\'{e}curit\'{e} IaC (r\`{e}gles Terraform), r\'{e}sultats en SARIF.
+  \item \textbf{Terraform Plan} (pull requests uniquement)~: g\'{e}n\`{e}re le plan et le publie en commentaire sur la PR pour revue manuelle avant merge.
+  \item \textbf{Terraform Apply} (push vers \code{main})~: \code{apply -auto-approve} avec variables sensibles inject\'{e}es depuis les secrets GitHub.
+  \item \textbf{Ansible Post-Deploy}~: apr\`{e}s l'apply, un playbook attend que le health check de l'API r\'{e}ponde, synchronise les assets frontend vers S3, et soumet un job de test pour valider la cha\^{i}ne compl\`{e}te.
 \end{enumerate}
 
-\subsection{Couverture des outils de sécurité}
+\subsection{Pipeline C -- S\'{e}curit\'{e} (\code{security.yml})}
+
+D\'{e}clench\'{e} sur chaque push vers \code{main}, chaque PR, et hebdomadairement (lundi 6h UTC).
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Semgrep SAST}~: analyse statique avec les r\`{e}gles \code{p/python} et \code{p/owasp-top-ten}. Couvre Python, Terraform, Dockerfile et YAML. Bloquant sur les findings critiques.
+  \item \textbf{pip-audit}~: scan des d\'{e}pendances Python contre la base CVE, s\'{e}par\'{e}ment pour l'API et le worker.
+  \item \textbf{TruffleHog}~: scan de l'historique Git complet pour d\'{e}tecter des secrets committ\'{e}s par erreur. Mode \code{--only-verified} pour limiter les faux positifs.
+\end{enumerate}
+
+\subsection{Couverture des outils de s\'{e}curit\'{e}}
 
 \begin{tabularx}{\linewidth}{llX}
 \toprule
-Outil & Pipeline & Couverture \\
+Outil & Pipeline & P\'{e}rim\`{e}tre \\
 \midrule
-Semgrep & C & SAST Python + IaC, règles OWASP Top 10 \\
-Checkov & B & Mauvaises configurations Terraform (chiffrement, IAM, réseau) \\
-Trivy & A & Vulnérabilités CVE sur filesystem et images Docker \\
-TruffleHog & C & Détection de secrets dans l'historique Git \\
-pip-audit & C & CVE dans les dépendances Python \\
-SonarCloud & A & Qualité de code, dette technique, couverture de tests \\
+Semgrep & C & SAST Python + IaC, r\`{e}gles OWASP Top 10 \\
+Checkov & B & Mauvaises configurations Terraform (chiffrement, IAM, r\'{e}seau) \\
+Trivy & A & CVE sur filesystem et images Docker \\
+TruffleHog & C & D\'{e}tection de secrets dans l'historique Git \\
+pip-audit & C & CVE dans les d\'{e}pendances Python \\
+SonarCloud & A & Qualit\'{e} de code, dette technique, couverture de tests \\
 \bottomrule
 \end{tabularx}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Automatisation — Ansible}
+\section{Automatisation -- Ansible}
 
-Ansible est utilisé en post-déploiement pour valider que l'infrastructure est opérationnelle et pour synchroniser les assets statiques. Le playbook (\texttt{ansible/deploy.yml}) s'exécute en local sur le runner GitHub Actions après \texttt{terraform apply} :
+Ansible est utilis\'{e} en post-d\'{e}ploiement pour valider que l'infrastructure est op\'{e}rationnelle et synchroniser les assets statiques. Le playbook (\code{ansible/deploy.yml}) s'ex\'{e}cute sur le runner GitHub Actions apr\`{e}s \code{terraform apply}~:
 
 \begin{enumerate}[noitemsep]
-  \item Récupère le DNS de l'ALB via \texttt{terraform output}.
-  \item Attend le passage du health check \texttt{GET /health} avec retry (10 tentatives, 15 secondes d'intervalle).
+  \item R\'{e}cup\`{e}re le DNS de l'ALB via \code{terraform output}.
+  \item Attend le passage du health check \code{GET /health} avec retry (10 tentatives, 15 secondes d'intervalle).
   \item Synchronise les fichiers HTML du frontend vers le bucket S3.
-  \item Soumet un job de test via \texttt{POST /jobs} pour valider la chaîne API → SQS → worker.
+  \item Soumet un job de test via \code{POST /jobs} pour valider la cha\^{i}ne API$\to$SQS$\to$worker.
 \end{enumerate}
 
-Ce choix permet de ne pas dupliquer la logique de déploiement des assets dans Terraform et de disposer d'une validation fonctionnelle automatisée après chaque déploiement.
+Ce choix \'{e}vite de dupliquer la logique de d\'{e}ploiement des assets dans Terraform et fournit une validation fonctionnelle automatis\'{e}e apr\`{e}s chaque d\'{e}ploiement.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Observabilité}
+\section{Observabilit\'{e}}
 
 \subsection{Logs}
 
-Les logs de l'API et du worker sont streamés vers CloudWatch Logs via le driver \texttt{awslogs} configuré dans les définitions de tâches ECS :
-
-\begin{itemize}[noitemsep]
-  \item \texttt{/ecs/git-archaeologist-dev/api}
-  \item \texttt{/ecs/git-archaeologist-dev/worker}
-\end{itemize}
-
-Rétention fixée à 14 jours. Cela couvre le debugging opérationnel sans coût de stockage excessif.
+Les logs de l'API et du worker sont stream\'{e}s vers CloudWatch Logs via le driver \code{awslogs} configur\'{e} dans les d\'{e}finitions de t\^{a}ches ECS (\code{/ecs/git-archaeologist-dev/api} et \code{/ecs/git-archaeologist-dev/worker}). R\'{e}tention fix\'{e}e \`{a} 14 jours.
 
 \subsection{Dashboard CloudWatch}
 
-Un dashboard centralise 5 métriques clés :
+Un dashboard centralise cinq m\'{e}triques cl\'{e}s~:
 
 \begin{tabularx}{\linewidth}{lX}
 \toprule
-Widget & Métrique \\
+Widget & M\'{e}trique \\
 \midrule
-ALB Request Count & Nombre de requêtes par minute (SUM) \\
-ALB Response Time p95 & Latence au 95e percentile \\
+ALB Request Count & Nombre de requ\^{e}tes par minute (SUM) \\
+ALB Response Time p95 & Latence au 95\textsuperscript{e} percentile \\
 SQS Queue Depth & Messages visibles dans la file (backlog de jobs) \\
-Worker Task Count & Tâches ECS en cours d'exécution (Container Insights) \\
+Worker Task Count & T\^{a}ches ECS en cours d'ex\'{e}cution (Container Insights) \\
 ALB 5xx Error Count & Erreurs serveur par minute (SUM) \\
 \bottomrule
 \end{tabularx}
@@ -332,35 +291,34 @@ ALB 5xx Error Count & Erreurs serveur par minute (SUM) \\
 \subsection{Alarmes}
 
 \begin{itemize}[noitemsep]
-  \item \textbf{queue-depth-high} : file SQS $>$ 20 messages pendant 2 minutes consécutives → le worker est bloqué ou sous-dimensionné.
-  \item \textbf{api-5xx-high} : $>$ 10 erreurs 5xx/minute pendant 2 minutes → problème applicatif ou infrastructure.
+  \item \textbf{queue-depth-high}~: file SQS $>$ 20 messages pendant 2 minutes cons\'{e}cutives -- le worker est bloqu\'{e} ou sous-dimensionn\'{e}.
+  \item \textbf{api-5xx-high}~: plus de 10 erreurs 5xx par minute pendant 2 minutes -- probl\`{e}me applicatif ou infrastructure.
 \end{itemize}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Limites connues et pistes d'amélioration}
+\section{Limites et am\'{e}liorations possibles}
 
 \begin{tabularx}{\linewidth}{lX}
 \toprule
-Limite & Mitigation en production \\
+Limite actuelle & Mitigation en production \\
 \midrule
-NAT Gateway unique (point de défaillance sur la sortie privée) & Une NAT GW par AZ \\
-ALB en HTTP uniquement (pas de TLS) & Certificat ACM + listener HTTPS + redirection HTTP→HTTPS \\
-Worker non scalable automatiquement & ECS Application Auto Scaling sur la métrique de profondeur de file \\
-Credentials AWS Academy expirés à chaque session & OIDC federation (pas de secrets statiques dans GitHub) \\
-Tags ECR immuables avec SHA de commit & Le pipeline doit passer \texttt{-var=api\_image=\$SHA} à \texttt{terraform apply} \\
-Pas d'authentification sur l'API & API Gateway + Cognito ou clé API ; le secret webhook est la seule protection actuelle \\
+NAT Gateway unique & Une NAT GW par AZ pour \'{e}viter le point de d\'{e}faillance sur la sortie priv\'{e}e \\
+ALB en HTTP uniquement & Certificat ACM + listener HTTPS + redirection HTTP vers HTTPS \\
+Worker non scalable & ECS Application Auto Scaling sur la m\'{e}trique de profondeur de file SQS \\
+Credentials AWS temporaires & OIDC federation GitHub$\to$IAM (pas de secrets statiques \`{a} stocker) \\
+Pas d'auth sur l'API & API Gateway + Cognito ou cl\'{e} API ; le secret webhook est la seule protection actuelle \\
 \bottomrule
 \end{tabularx}
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Estimation des coûts (environnement dev)}
+\section{Estimation des co\^{u}ts (environnement dev)}
 
 \begin{tabularx}{\linewidth}{lX}
 \toprule
-Ressource & Coût mensuel estimé \\
+Ressource & Co\^{u}t mensuel estim\'{e} \\
 \midrule
-ECS Fargate — API (0,25 vCPU / 0,5 GB, 1 tâche) & \$6 \\
-ECS Fargate — Worker (0,5 vCPU / 1 GB, 1 tâche) & \$11 \\
+ECS Fargate API (0,25 vCPU / 0,5~GB, 1 t\^{a}che) & \$6 \\
+ECS Fargate Worker (0,5 vCPU / 1~GB, 1 t\^{a}che) & \$11 \\
 NAT Gateway (1, trafic minimal) & \$35 \\
 ALB & \$16 \\
 Secrets Manager (2 secrets) & \$0,80 \\
@@ -371,6 +329,6 @@ DynamoDB + SQS (trafic dev) & $<$ \$1 \\
 \bottomrule
 \end{tabularx}
 
-La NAT Gateway représente la majorité du coût. C'est une contrainte structurelle d'AWS : chaque heure d'existence est facturée, indépendamment du trafic. En production, on la remplacerait en partie par des VPC Endpoints (S3, DynamoDB, SQS, Secrets Manager) pour réduire le trafic qui la traverse.
+La NAT Gateway repr\'{e}sente la majorit\'{e} du co\^{u}t. En production, des VPC Endpoints (S3, DynamoDB, SQS, Secrets Manager) r\'{e}duiraient le trafic qui la traverse.
 
 \end{document}
