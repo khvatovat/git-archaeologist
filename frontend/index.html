@@ -3,93 +3,677 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>git-archaeologist — watched repos</title>
+  <title>git-archaeologist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500&display=swap">
   <style>
-    body { font-family: monospace; max-width: 820px; margin: 40px auto; padding: 0 16px; }
-    h1 { font-size: 1.2rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-    th { background: #f4f4f4; }
-    a { color: #0066cc; }
-    form { margin-top: 24px; display: flex; gap: 8px; flex-wrap: wrap; }
-    input { font-family: monospace; padding: 6px 8px; border: 1px solid #999; width: 200px; }
-    button { padding: 6px 14px; cursor: pointer; }
-    .err { color: red; margin-top: 8px; }
-    .ok  { color: green; margin-top: 8px; }
-    #webhook-info { background: #fffbe6; border: 1px solid #e5c000; padding: 12px; margin-top: 16px; display: none; }
-    code { background: #f0f0f0; padding: 2px 4px; }
+    :root {
+      --bg:        #06080f;
+      --surface:   #0d1117;
+      --surface2:  #161b27;
+      --surface3:  #1c2333;
+      --border:    rgba(255,255,255,0.06);
+      --border2:   rgba(255,255,255,0.11);
+      --accent:    #7c6af7;
+      --accent2:   #9d8ff7;
+      --green:     #22d3a0;
+      --amber:     #fbbf24;
+      --red:       #f87171;
+      --text:      #e2e8f0;
+      --dim:       #8b99b1;
+      --dimmer:    #4a5568;
+      --mono:      'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── background glow ─────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(124,106,247,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 110%, rgba(34,211,160,0.07) 0%, transparent 60%);
+      z-index: 0;
+    }
+
+    /* ── layout ──────────────────────────────────────────── */
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── nav ─────────────────────────────────────────────── */
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 22px 0 0;
+      margin-bottom: 48px;
+    }
+
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(124,106,247,0.3);
+    }
+
+    .logo-text {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .logo-text span { color: var(--dim); font-weight: 400; }
+
+    /* ── hero ────────────────────────────────────────────── */
+    .hero { margin-bottom: 48px; }
+
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #fff 30%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--dim);
+      max-width: 480px;
+      line-height: 1.65;
+    }
+
+    /* ── stat chips ──────────────────────────────────────── */
+    .stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 130px;
+    }
+
+    .stat-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      flex-shrink: 0;
+    }
+
+    .stat-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+    .stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+    }
+
+    /* ── section headers ─────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── repo cards ──────────────────────────────────────── */
+    .repos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 40px;
+    }
+
+    .repo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: border-color .15s, transform .15s, box-shadow .15s;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .repo-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(124,106,247,0.04) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity .15s;
+    }
+
+    .repo-card:hover {
+      border-color: var(--border2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+
+    .repo-card:hover::before { opacity: 1; }
+
+    .repo-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .repo-card-name svg { color: var(--dim); flex-shrink: 0; }
+
+    .repo-card-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent2);
+      background: rgba(124,106,247,0.1);
+      border-radius: 4px;
+      padding: 2px 7px;
+      display: inline-block;
+      margin-bottom: 14px;
+    }
+
+    .repo-card-meta {
+      font-size: 11px;
+      color: var(--dimmer);
+      margin-bottom: 16px;
+    }
+
+    .repo-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .repo-card-cta {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent2);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: gap .15s;
+    }
+
+    .repo-card:hover .repo-card-cta { gap: 8px; }
+
+    .repo-secret {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--dimmer);
+    }
+
+    /* ── empty state ─────────────────────────────────────── */
+    .empty-state {
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 48px;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .empty-state-icon {
+      font-size: 36px;
+      margin-bottom: 14px;
+      opacity: .6;
+    }
+
+    .empty-state h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    /* ── register form ───────────────────────────────────── */
+    .register-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .register-card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .register-card .sub {
+      font-size: 13px;
+      color: var(--dim);
+      margin-bottom: 22px;
+      line-height: 1.5;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    input[type="text"] {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      width: 100%;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,106,247,0.15);
+    }
+
+    input::placeholder { color: var(--dimmer); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      border: none;
+      cursor: pointer;
+      transition: background .15s, transform .1s, box-shadow .15s;
+      white-space: nowrap;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(124,106,247,0.3);
+      align-self: flex-end;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent2);
+      box-shadow: 0 4px 20px rgba(124,106,247,0.45);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .form-msg {
+      font-size: 13px;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+
+    .form-msg.ok  { color: var(--green); }
+    .form-msg.err { color: var(--red); }
+
+    /* ── webhook card ────────────────────────────────────── */
+    .webhook-card {
+      background: linear-gradient(135deg, rgba(34,211,160,0.05) 0%, rgba(124,106,247,0.05) 100%);
+      border: 1px solid rgba(34,211,160,0.2);
+      border-radius: 14px;
+      padding: 24px;
+      display: none;
+    }
+
+    .webhook-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .webhook-card h3::before {
+      content: '';
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .webhook-card .hint {
+      font-size: 12px;
+      color: var(--dim);
+      margin-bottom: 18px;
+    }
+
+    .wh-rows { display: flex; flex-direction: column; gap: 10px; }
+
+    .wh-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .wh-label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      width: 90px;
+      flex-shrink: 0;
+    }
+
+    .wh-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--dim);
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+    /* ── error state ─────────────────────────────────────── */
+    .load-err {
+      font-size: 13px;
+      color: var(--red);
+      padding: 16px;
+    }
+
+    /* ── spinner ─────────────────────────────────────────── */
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+    .loading-row { color: var(--dim); font-size: 13px; padding: 24px 0; animation: pulse 1.5s infinite; }
   </style>
 </head>
 <body>
+<div class="wrap">
 
-<h1>git-archaeologist / watched repos</h1>
-<p>Each push to a registered repo triggers an automatic file-history analysis.</p>
+  <nav>
+    <div class="logo-icon">⛏</div>
+    <div class="logo-text">git-archaeologist <span>/ repos</span></div>
+  </nav>
 
-<table>
-  <thead>
-    <tr><th>Repo</th><th>Path</th><th>Registered</th><th>Webhook secret</th><th>History</th></tr>
-  </thead>
-  <tbody id="repos-tbody">
-    <tr><td colspan="5">loading…</td></tr>
-  </tbody>
-</table>
+  <div class="hero">
+    <h1>Unearth the story<br>behind every file</h1>
+    <p>Every commit tells a part of the story. git-archaeologist pieces them together into a narrative — the decisions, the debates, the tradeoffs.</p>
+  </div>
 
-<h2 style="margin-top:32px;font-size:1rem;">Register a repo</h2>
-<form id="register-form">
-  <input id="repo-name" type="text" placeholder="owner/repo" required />
-  <input id="repo-path" type="text" placeholder="path (e.g. README.md)" value="README.md" />
-  <button type="submit">Watch</button>
-</form>
-<div id="form-msg"></div>
+  <div class="stats" id="stats">
+    <div class="stat">
+      <div>
+        <div class="stat-dot"></div>
+      </div>
+      <div>
+        <div class="stat-val" id="stat-repos">—</div>
+        <div class="stat-label">Repos watched</div>
+      </div>
+    </div>
+  </div>
 
-<div id="webhook-info">
-  <strong>Webhook registered.</strong> Set up a GitHub webhook on the repo:
-  <ul>
-    <li>Payload URL: <code id="wh-url"></code></li>
-    <li>Content type: <code>application/json</code></li>
-    <li>Secret: <code id="wh-secret"></code></li>
-    <li>Events: <strong>Just the push event</strong></li>
-  </ul>
+  <div class="section-header">
+    <div class="section-title">Watched repos</div>
+  </div>
+
+  <div id="repos-container">
+    <div class="loading-row">Loading repos…</div>
+  </div>
+
+  <div class="register-card">
+    <h2>Watch a new repo</h2>
+    <p class="sub">Every push to a watched repo triggers a fresh AI analysis of that file's entire commit history.</p>
+    <form id="register-form">
+      <div class="form-row">
+        <div class="field">
+          <label>Repository</label>
+          <input id="repo-name" type="text" placeholder="owner/repo" required autocomplete="off" />
+        </div>
+        <div class="field" style="max-width:200px">
+          <label>File path</label>
+          <input id="repo-path" type="text" placeholder="README.md" value="README.md" autocomplete="off" />
+        </div>
+        <button type="submit" class="btn btn-primary" id="watch-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Watch
+        </button>
+      </div>
+    </form>
+    <div class="form-msg" id="form-msg"></div>
+  </div>
+
+  <div class="webhook-card" id="webhook-card">
+    <h3>Webhook ready</h3>
+    <p class="hint">Add this webhook to your GitHub repo settings → Webhooks → Add webhook</p>
+    <div class="wh-rows">
+      <div class="wh-row">
+        <span class="wh-label">Payload URL</span>
+        <span class="wh-value" id="wh-url"></span>
+        <button class="copy-btn" onclick="copyField('wh-url', this)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="wh-row">
+        <span class="wh-label">Content type</span>
+        <span class="wh-value">application/json</span>
+        <button class="copy-btn" onclick="copyText('application/json', this)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="wh-row">
+        <span class="wh-label">Secret</span>
+        <span class="wh-value" id="wh-secret" style="letter-spacing:0.04em"></span>
+        <button class="copy-btn" onclick="copyField('wh-secret', this)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="wh-row">
+        <span class="wh-label">Events</span>
+        <span class="wh-value">Just the push event</span>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="config.js"></script>
 <script>
   const API = window.API_BASE || '';
 
+  function copyField(id, btn) {
+    copyText(document.getElementById(id).textContent, btn);
+  }
+
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('copied');
+      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
+      }, 2000);
+    });
+  }
+
+  function timeAgo(iso) {
+    const d = new Date(iso);
+    const diff = (Date.now() - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function repoCard(repo) {
+    const href = `history.html?repo_id=${repo.repo_id}&name=${encodeURIComponent(repo.name)}`;
+    const date = repo.created_at ? timeAgo(repo.created_at) : '';
+    return `
+      <a class="repo-card" href="${href}">
+        <div class="repo-card-name">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          ${escHtml(repo.name)}
+        </div>
+        <div class="repo-card-path">${escHtml(repo.path || 'README.md')}</div>
+        <div class="repo-card-meta">watching since ${escHtml(date)}</div>
+        <div class="repo-card-footer">
+          <span class="repo-card-cta">
+            View history
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </span>
+          <span class="repo-secret">${escHtml((repo.webhook_secret || '').slice(0, 10))}…</span>
+        </div>
+      </a>`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   async function loadRepos() {
-    const tbody = document.getElementById('repos-tbody');
+    const container = document.getElementById('repos-container');
     try {
       const r = await fetch(`${API}/repos`);
       const data = await r.json();
       const repos = data.repos || [];
+
+      document.getElementById('stat-repos').textContent = repos.length;
+
       if (!repos.length) {
-        tbody.innerHTML = '<tr><td colspan="5">no repos registered yet</td></tr>';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⛏</div>
+            <h3>No repos yet</h3>
+            <p>Register your first repo below to start getting AI-powered history reports.</p>
+          </div>`;
         return;
       }
-      tbody.innerHTML = repos.map(repo => `
-        <tr>
-          <td><a href="https://github.com/${repo.name}" target="_blank">${repo.name}</a></td>
-          <td><code>${repo.path}</code></td>
-          <td>${(repo.created_at || '').slice(0, 10)}</td>
-          <td><code>${repo.webhook_secret.slice(0, 12)}…</code></td>
-          <td><a href="history.html?repo_id=${repo.repo_id}&name=${encodeURIComponent(repo.name)}">view history</a></td>
-        </tr>
-      `).join('');
+
+      const grid = document.createElement('div');
+      grid.className = 'repos-grid';
+      grid.innerHTML = repos.map(repoCard).join('');
+      container.innerHTML = '';
+      container.appendChild(grid);
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="5" class="err">failed to load: ${e.message}</td></tr>`;
+      container.innerHTML = `<div class="load-err">Failed to load: ${escHtml(e.message)}</div>`;
     }
   }
 
   document.getElementById('register-form').addEventListener('submit', async e => {
     e.preventDefault();
     const msg = document.getElementById('form-msg');
-    const info = document.getElementById('webhook-info');
+    const btn = document.getElementById('watch-btn');
     const name = document.getElementById('repo-name').value.trim();
     const path = document.getElementById('repo-path').value.trim() || 'README.md';
 
-    msg.textContent = 'registering…';
-    msg.className = '';
-    info.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Registering…';
+    msg.textContent = '';
+    msg.className = 'form-msg';
+    document.getElementById('webhook-card').style.display = 'none';
 
     try {
       const r = await fetch(`${API}/repos`, {
@@ -100,17 +684,23 @@
       if (!r.ok) throw new Error(await r.text());
       const repo = await r.json();
 
-      msg.textContent = 'registered successfully';
-      msg.className = 'ok';
+      msg.textContent = '✓ Repo registered — set up the webhook below';
+      msg.className = 'form-msg ok';
 
       document.getElementById('wh-url').textContent = `${API}/webhook`;
       document.getElementById('wh-secret').textContent = repo.webhook_secret;
-      info.style.display = 'block';
+      const card = document.getElementById('webhook-card');
+      card.style.display = 'block';
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+      document.getElementById('repo-name').value = '';
       await loadRepos();
     } catch (e) {
-      msg.textContent = `error: ${e.message}`;
-      msg.className = 'err';
+      msg.textContent = 'Error: ' + e.message;
+      msg.className = 'form-msg err';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Watch`;
     }
   });
 

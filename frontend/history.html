@@ -3,114 +3,661 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>git-archaeologist — analysis history</title>
+  <title>git-archaeologist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    body { font-family: monospace; max-width: 900px; margin: 40px auto; padding: 0 16px; }
-    h1 { font-size: 1.2rem; }
-    a { color: #0066cc; }
-    .job { border: 1px solid #ccc; padding: 12px; margin-top: 12px; }
-    .job-header { display: flex; gap: 16px; align-items: baseline; }
-    .status { font-weight: bold; }
-    .status.done    { color: green; }
-    .status.running { color: orange; }
-    .status.failed  { color: red; }
-    .status.pending { color: gray; }
-    .sha { color: #555; font-size: 0.85rem; }
-    .result { margin-top: 8px; white-space: pre-wrap; font-size: 0.82rem;
-              background: #f8f8f8; padding: 10px; max-height: 400px; overflow-y: auto;
-              border: 1px solid #ddd; display: none; }
-    .toggle { cursor: pointer; font-size: 0.8rem; color: #0066cc; margin-top: 6px; }
-    .err-text { color: red; margin-top: 6px; font-size: 0.85rem; }
-    .empty { color: #555; }
+    :root {
+      --bg:        #06080f;
+      --surface:   #0d1117;
+      --surface2:  #161b27;
+      --surface3:  #1c2333;
+      --border:    rgba(255,255,255,0.06);
+      --border2:   rgba(255,255,255,0.11);
+      --accent:    #7c6af7;
+      --accent2:   #9d8ff7;
+      --green:     #22d3a0;
+      --amber:     #fbbf24;
+      --red:       #f87171;
+      --text:      #e2e8f0;
+      --dim:       #8b99b1;
+      --dimmer:    #4a5568;
+      --mono:      'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(124,106,247,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 90% 110%, rgba(34,211,160,0.06) 0%, transparent 60%);
+      z-index: 0;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── top bar ─────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 22px 0 32px;
+      flex-wrap: wrap;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--dim);
+      text-decoration: none;
+      transition: color .15s;
+    }
+
+    .back-link:hover { color: var(--text); }
+
+    .sep { color: var(--dimmer); font-size: 16px; }
+
+    .repo-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .repo-header-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .repo-header-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent2);
+      background: rgba(124,106,247,0.1);
+      border-radius: 4px;
+      padding: 2px 7px;
+    }
+
+    .gh-link {
+      margin-left: auto;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      text-decoration: none;
+      transition: color .15s;
+      flex-shrink: 0;
+    }
+
+    .gh-link:hover { color: var(--text); }
+
+    /* ── stats row ───────────────────────────────────────── */
+    .stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .stat-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      flex-shrink: 0;
+    }
+
+    .stat-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .stat-dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    .stat-dot.red   { background: var(--red);   box-shadow: 0 0 8px var(--red);   }
+
+    .stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+    }
+
+    /* ── live indicator ──────────────────────────────────── */
+    .live-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--dim);
+      margin-bottom: 20px;
+    }
+
+    @keyframes ping {
+      0%   { transform: scale(1);   opacity: 1; }
+      70%  { transform: scale(2.2); opacity: 0; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    .live-dot {
+      position: relative;
+      width: 8px; height: 8px; flex-shrink: 0;
+    }
+
+    .live-dot::before, .live-dot::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .live-dot::after {
+      animation: ping 2s cubic-bezier(0,0,.2,1) infinite;
+    }
+
+    /* ── timeline ────────────────────────────────────────── */
+    .timeline { display: flex; flex-direction: column; gap: 12px; }
+
+    .job {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+
+    .job.is-done:hover  { border-color: rgba(124,106,247,0.3); }
+    .job.is-running     { border-color: rgba(251,191,36,0.2); }
+    .job.is-failed      { border-color: rgba(248,113,113,0.2); }
+
+    .job-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      cursor: default;
+    }
+
+    .job.is-done .job-header { cursor: pointer; }
+    .job.is-done .job-header:hover .job-toggle { color: var(--text); }
+
+    /* status pill */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .status-pill .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .pill-done    { color: var(--green); background: rgba(34,211,160,0.1); }
+    .pill-running { color: var(--amber); background: rgba(251,191,36,0.1); }
+    .pill-pending { color: var(--dim);   background: rgba(139,153,177,0.1); }
+    .pill-failed  { color: var(--red);   background: rgba(248,113,113,0.1); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pill-running .dot {
+      animation: spin 1s linear infinite;
+      border: 1.5px solid currentColor;
+      border-top-color: transparent;
+      background: transparent;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+
+    .job-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .job-sha {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent2);
+      background: rgba(124,106,247,0.1);
+      border-radius: 4px;
+      padding: 2px 7px;
+      flex-shrink: 0;
+    }
+
+    .job-branch {
+      font-size: 12px;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .job-time {
+      font-size: 12px;
+      color: var(--dimmer);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    .job-toggle {
+      font-size: 11px;
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      font-weight: 500;
+      transition: color .15s;
+    }
+
+    .job-toggle svg {
+      transition: transform .2s;
+    }
+
+    .job.expanded .job-toggle svg { transform: rotate(90deg); }
+
+    /* job error */
+    .job-error {
+      padding: 0 20px 16px;
+      font-size: 12px;
+      color: var(--red);
+      font-family: var(--mono);
+    }
+
+    /* ── analysis panel ──────────────────────────────────── */
+    .analysis-panel {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .job.expanded .analysis-panel { display: block; }
+
+    .analysis-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 12px 20px 0;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--dim);
+      cursor: pointer;
+      transition: all .15s;
+    }
+
+    .btn-sm:hover { color: var(--text); border-color: var(--accent); }
+    .btn-sm.copied { color: var(--green); border-color: var(--green); }
+
+    /* ── prose (rendered markdown) ───────────────────────── */
+    .prose {
+      padding: 20px 28px 28px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: #c9d1df;
+    }
+
+    .prose h2 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent2);
+      margin: 28px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .prose h2:first-child { margin-top: 0; }
+
+    .prose p {
+      margin-bottom: 12px;
+      color: #b8c3d4;
+    }
+
+    .prose ul {
+      padding-left: 0;
+      list-style: none;
+      margin-bottom: 12px;
+    }
+
+    .prose ul li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 6px;
+      color: #b8c3d4;
+    }
+
+    .prose ul li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--accent2);
+      font-size: 11px;
+      top: 2px;
+    }
+
+    .prose strong { color: var(--text); font-weight: 600; }
+    .prose code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: rgba(124,106,247,0.1);
+      color: var(--accent2);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ── empty state ─────────────────────────────────────── */
+    .empty-state {
+      border: 1px dashed rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 56px;
+      text-align: center;
+    }
+
+    .empty-state-icon { font-size: 36px; margin-bottom: 14px; opacity: .6; }
+    .empty-state h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .empty-state p  { font-size: 13px; color: var(--dim); }
+
+    /* ── loading ─────────────────────────────────────────── */
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+    .loading-row { color: var(--dim); font-size: 13px; padding: 24px 0; animation: pulse 1.5s infinite; }
+
+    /* ── error ───────────────────────────────────────────── */
+    .load-err { font-size: 13px; color: var(--red); padding: 16px; }
   </style>
 </head>
 <body>
+<div class="wrap">
 
-<p><a href="index.html">← back to repos</a></p>
-<h1 id="page-title">analysis history</h1>
-<div id="jobs-list"><p>loading…</p></div>
+  <div class="topbar">
+    <a class="back-link" href="index.html">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Repos
+    </a>
+    <span class="sep">/</span>
+    <div class="repo-header">
+      <span class="repo-header-name" id="repo-name-el">—</span>
+      <span class="repo-header-path" id="repo-path-el"></span>
+      <a class="gh-link" id="gh-link" href="#" target="_blank" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+
+  <div class="stats" id="stats" style="display:none">
+    <div class="stat">
+      <div class="stat-dot"></div>
+      <div>
+        <div class="stat-val" id="stat-total">—</div>
+        <div class="stat-label">Analyses</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-dot green"></div>
+      <div>
+        <div class="stat-val" id="stat-success">—</div>
+        <div class="stat-label">Success rate</div>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="stat-dot amber"></div>
+      <div>
+        <div class="stat-val" id="stat-last">—</div>
+        <div class="stat-label">Last run</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="live-bar" id="live-bar" style="display:none">
+    <span class="live-dot"></span>
+    <span>Live — refreshing every 15s</span>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <div class="loading-row">Loading analyses…</div>
+  </div>
+
+</div>
 
 <script src="config.js"></script>
 <script>
   const API = window.API_BASE || '';
   const params = new URLSearchParams(location.search);
   const repoId = params.get('repo_id');
-  const repoName = params.get('name') || 'repo';
+  const repoName = params.get('name') || '';
+  const repoPath = params.get('path') || '';
 
-  document.getElementById('page-title').textContent = `analysis history — ${repoName}`;
-  document.title = `history — ${repoName}`;
-
-  function statusClass(s) {
-    return ['done', 'running', 'failed', 'pending'].includes(s) ? s : 'pending';
+  if (repoName) {
+    document.getElementById('repo-name-el').textContent = repoName;
+    document.title = `${repoName} — git-archaeologist`;
+    const ghLink = document.getElementById('gh-link');
+    ghLink.href = `https://github.com/${repoName}`;
+    ghLink.style.display = 'flex';
   }
+  if (repoPath) {
+    document.getElementById('repo-path-el').textContent = repoPath;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const diff = (Date.now() - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function pillHtml(status) {
+    const map = {
+      done:    ['pill-done',    'done'],
+      running: ['pill-running', 'running'],
+      pending: ['pill-pending', 'pending'],
+      failed:  ['pill-failed',  'failed'],
+    };
+    const [cls, label] = map[status] || ['pill-pending', status];
+    return `<span class="status-pill ${cls}"><span class="dot"></span>${label}</span>`;
+  }
+
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('copied');
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+      setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
+    });
+  }
+
+  const expandState = {};
 
   function renderJob(job) {
-    const div = document.createElement('div');
-    div.className = 'job';
     const sha = (job.commit_sha || '').slice(0, 8);
-    const ts = (job.created_at || '').slice(0, 16).replace('T', ' ');
-    const branch = job.branch ? ` on ${job.branch}` : '';
+    const branch = job.branch || '';
+    const ts = fmtDate(job.created_at);
+    const ago = timeAgo(job.created_at);
+    const isDone = job.status === 'done';
+    const isFailed = job.status === 'failed';
+    const isRunning = job.status === 'running' || job.status === 'pending';
+    const wasExpanded = expandState[job.job_id];
 
-    div.innerHTML = `
+    const el = document.createElement('div');
+    el.className = `job is-${job.status}${wasExpanded ? ' expanded' : ''}`;
+    el.dataset.jobId = job.job_id;
+
+    el.innerHTML = `
       <div class="job-header">
-        <span class="status ${statusClass(job.status)}">${job.status}</span>
-        <span class="sha">${sha}${branch}</span>
-        <span>${ts} UTC</span>
+        ${pillHtml(job.status)}
+        <div class="job-meta">
+          ${sha ? `<span class="job-sha">${escHtml(sha)}</span>` : ''}
+          ${branch ? `<span class="job-branch"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>${escHtml(branch)}</span>` : ''}
+          <span class="job-time" title="${escHtml(ts)}">${escHtml(ago)}</span>
+        </div>
+        ${isDone ? `<span class="job-toggle"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></span>` : ''}
       </div>
+      ${isFailed && job.error ? `<div class="job-error">${escHtml(job.error)}</div>` : ''}
+      ${isDone && job.result ? `
+        <div class="analysis-panel">
+          <div class="analysis-actions">
+            <button class="btn-sm copy-analysis-btn">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy analysis
+            </button>
+          </div>
+          <div class="prose" id="prose-${escHtml(job.job_id)}"></div>
+        </div>` : ''}
     `;
 
-    if (job.status === 'failed' && job.error) {
-      const err = document.createElement('div');
-      err.className = 'err-text';
-      err.textContent = job.error;
-      div.appendChild(err);
-    }
-
-    if (job.status === 'done' && job.result) {
-      const toggle = document.createElement('div');
-      toggle.className = 'toggle';
-      toggle.textContent = '▶ show analysis';
-      div.appendChild(toggle);
-
-      const result = document.createElement('pre');
-      result.className = 'result';
-      result.textContent = job.result;
-      div.appendChild(result);
-
-      toggle.addEventListener('click', () => {
-        const visible = result.style.display === 'block';
-        result.style.display = visible ? 'none' : 'block';
-        toggle.textContent = visible ? '▶ show analysis' : '▼ hide analysis';
+    if (isDone) {
+      el.querySelector('.job-header').addEventListener('click', () => {
+        const isOpen = el.classList.toggle('expanded');
+        expandState[job.job_id] = isOpen;
       });
+
+      if (job.result) {
+        const proseEl = el.querySelector(`#prose-${job.job_id}`);
+        if (proseEl) {
+          proseEl.innerHTML = marked.parse(job.result);
+        }
+
+        const copyBtn = el.querySelector('.copy-analysis-btn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            copyText(job.result, copyBtn);
+          });
+        }
+      }
     }
 
-    return div;
+    return el;
   }
 
-  async function load() {
-    const container = document.getElementById('jobs-list');
+  function updateStats(jobs) {
+    if (!jobs.length) return;
+    const total = jobs.length;
+    const done  = jobs.filter(j => j.status === 'done').length;
+    const rate  = total ? Math.round((done / total) * 100) + '%' : '—';
+    const last  = jobs.length ? timeAgo(jobs[0].created_at) : '—';
+
+    document.getElementById('stat-total').textContent   = total;
+    document.getElementById('stat-success').textContent = rate;
+    document.getElementById('stat-last').textContent    = last;
+    document.getElementById('stats').style.display      = 'flex';
+    document.getElementById('live-bar').style.display   = 'flex';
+  }
+
+  let lastJobIds = null;
+
+  async function load(isRefresh) {
+    const timeline = document.getElementById('timeline');
     if (!repoId) {
-      container.innerHTML = '<p class="err-text">missing repo_id in URL</p>';
+      timeline.innerHTML = '<div class="load-err">Missing repo_id in URL.</div>';
       return;
     }
     try {
       const r = await fetch(`${API}/repos/${repoId}/history`);
       const data = await r.json();
       const jobs = data.jobs || [];
+
+      const currentIds = jobs.map(j => j.job_id + j.status).join(',');
+      if (isRefresh && currentIds === lastJobIds) return;
+      lastJobIds = currentIds;
+
+      updateStats(jobs);
+
       if (!jobs.length) {
-        container.innerHTML = '<p class="empty">no analysis runs yet — push a commit to trigger one</p>';
+        timeline.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⛏</div>
+            <h3>No analyses yet</h3>
+            <p>Push a commit to the watched repo to trigger your first file-history report.</p>
+          </div>`;
         return;
       }
-      container.innerHTML = '';
-      jobs.forEach(job => container.appendChild(renderJob(job)));
+
+      timeline.innerHTML = '';
+      jobs.forEach(job => timeline.appendChild(renderJob(job)));
     } catch (e) {
-      container.innerHTML = `<p class="err-text">failed to load: ${e.message}</p>`;
+      if (!isRefresh) {
+        timeline.innerHTML = `<div class="load-err">Failed to load: ${escHtml(e.message)}</div>`;
+      }
     }
   }
 
-  load();
-  // Auto-refresh every 15s to pick up running jobs
-  setInterval(load, 15000);
+  load(false);
+  setInterval(() => load(true), 15000);
 </script>
 </body>
 </html>
