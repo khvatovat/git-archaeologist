@@ -55,8 +55,9 @@ module "ecs" {
   anthropic_secret_arn    = module.security.anthropic_secret_arn
   github_token_secret_arn = module.security.github_token_secret_arn
 
-  api_image    = var.api_image
-  worker_image = var.worker_image
+  api_image       = var.api_image
+  worker_image    = var.worker_image
+  allowed_origins = "http://${var.project}-${local.env}-frontend.s3-website-${var.aws_region}.amazonaws.com"
 }
 
 module "frontend" {

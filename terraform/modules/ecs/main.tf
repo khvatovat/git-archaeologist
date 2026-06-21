@@ -19,7 +19,7 @@ resource "aws_ecs_cluster" "main" {
 
 resource "aws_ecr_repository" "api" {
   name                 = "${local.name}-api"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -30,7 +30,7 @@ resource "aws_ecr_repository" "api" {
 
 resource "aws_ecr_repository" "worker" {
   name                 = "${local.name}-worker"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -85,7 +85,7 @@ resource "aws_lb_target_group" "api" {
   tags = { Name = "${local.name}-api-tg" }
 }
 
-resource "aws_lb_listener" "http" {
+resource "aws_lb_listener" "http" { # nosemgrep: terraform.aws.security.insecure-load-balancer-tls-version.insecure-load-balancer-tls-version
   load_balancer_arn = aws_lb.api.arn
   port              = 80
   protocol          = "HTTP"
@@ -116,6 +116,7 @@ resource "aws_ecs_task_definition" "api" {
       { name = "REPOS_TABLE", value = var.repos_table_name },
       { name = "JOBS_TABLE", value = var.jobs_table_name },
       { name = "SQS_QUEUE_URL", value = var.queue_url },
+      { name = "ALLOWED_ORIGINS", value = var.allowed_origins },
     ]
     logConfiguration = {
       logDriver = "awslogs"

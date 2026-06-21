@@ -23,6 +23,10 @@ resource "aws_dynamodb_table" "repos" {
     projection_type = "ALL"
   }
 
+  server_side_encryption {
+    enabled = true
+  }
+
   tags = { Name = "${local.name}-repos" }
 }
 
@@ -51,6 +55,10 @@ resource "aws_dynamodb_table" "jobs" {
     hash_key        = "repo_id"
     range_key       = "created_at"
     projection_type = "ALL"
+  }
+
+  server_side_encryption {
+    enabled = true
   }
 
   tags = { Name = "${local.name}-jobs" }

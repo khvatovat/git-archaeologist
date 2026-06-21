@@ -23,6 +23,7 @@ variable "github_token_secret_arn" { type = string }
 
 variable "api_image" { type = string }
 variable "worker_image" { type = string }
+variable "allowed_origins" { type = string }
 
 variable "api_cpu" {
   type    = number
