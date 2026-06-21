@@ -1,0 +1,78 @@
+---
+- name: Post-deploy verification and frontend sync
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1') }}"
+    project: "{{ lookup('env', 'PROJECT') | default('git-archaeologist') }}"
+    env: "{{ lookup('env', 'ENV') | default('dev') }}"
+    stack_name: "{{ project }}-{{ env }}"
+    health_retries: 10
+    health_delay: 15
+
+  tasks:
+    - name: Get ALB DNS from Terraform output
+      command: terraform -chdir=terraform/envs/dev output -raw alb_dns_name
+      register: alb_dns
+      changed_when: false
+
+    - name: Get frontend S3 bucket name
+      command: terraform -chdir=terraform/envs/dev output -raw frontend_url
+      register: frontend_url
+      changed_when: false
+
+    - name: Wait for API health check to pass
+      uri:
+        url: "http://{{ alb_dns.stdout }}/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_result
+      retries: "{{ health_retries }}"
+      delay: "{{ health_delay }}"
+      until: health_result.status == 200
+
+    - name: Print health check result
+      debug:
+        msg: "API healthy — status {{ health_result.status }} after {{ health_result.attempts | default(1) }} attempt(s)"
+
+    - name: Sync frontend files to S3
+      aws_s3:
+        bucket: "{{ stack_name }}-frontend"
+        object: "{{ item.key }}"
+        src: "frontend/{{ item.file }}"
+        mode: put
+        content_type: "{{ item.content_type }}"
+        permission: public-read
+      loop:
+        - { key: "index.html",   file: "index.html",   content_type: "text/html" }
+        - { key: "history.html", file: "history.html",  content_type: "text/html" }
+      register: s3_result
+
+    - name: Invalidate CloudFront or report S3 URL
+      debug:
+        msg: "Frontend deployed → {{ frontend_url.stdout }}"
+
+    - name: Verify frontend is reachable
+      uri:
+        url: "{{ frontend_url.stdout }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: frontend_result
+
+    - name: Smoke test — submit a job via API
+      uri:
+        url: "http://{{ alb_dns.stdout }}/jobs"
+        method: POST
+        body_format: json
+        body:
+          repo_url: "https://github.com/psf/requests"
+        status_code: 202
+        timeout: 10
+      register: job_result
+
+    - name: Print job submission result
+      debug:
+        msg: "Job submitted — id={{ job_result.json.job_id }}"
