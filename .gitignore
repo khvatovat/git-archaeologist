@@ -224,3 +224,7 @@ coverage.xml
 .coverage
 checkov.sarif
 trivy-fs.sarif
+rapport.aux
+rapport.toc
+rapport.out
+rapport.log
