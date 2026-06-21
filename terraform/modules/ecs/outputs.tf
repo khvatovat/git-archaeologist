@@ -1,9 +1,9 @@
-output "cluster_name"   { value = aws_ecs_cluster.main.name }
-output "cluster_arn"    { value = aws_ecs_cluster.main.arn }
-output "api_service_name"    { value = aws_ecs_service.api.name }
+output "cluster_name" { value = aws_ecs_cluster.main.name }
+output "cluster_arn" { value = aws_ecs_cluster.main.arn }
+output "api_service_name" { value = aws_ecs_service.api.name }
 output "worker_service_name" { value = aws_ecs_service.worker.name }
-output "alb_dns_name"   { value = aws_lb.api.dns_name }
+output "alb_dns_name" { value = aws_lb.api.dns_name }
 output "alb_arn_suffix" { value = aws_lb.api.arn_suffix }
 output "target_group_arn_suffix" { value = aws_lb_target_group.api.arn_suffix }
-output "api_ecr_url"    { value = aws_ecr_repository.api.repository_url }
+output "api_ecr_url" { value = aws_ecr_repository.api.repository_url }
 output "worker_ecr_url" { value = aws_ecr_repository.worker.repository_url }

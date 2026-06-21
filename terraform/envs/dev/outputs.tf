@@ -13,8 +13,8 @@ output "worker_ecr_url" {
   value       = module.ecs.worker_ecr_url
 }
 
-output "frontend_url"     { value = module.frontend.website_url }
+output "frontend_url" { value = module.frontend.website_url }
 output "repos_table_name" { value = module.data.repos_table_name }
-output "jobs_table_name"  { value = module.data.jobs_table_name }
-output "queue_url"        { value = module.messaging.queue_url }
-output "dashboard_name"   { value = module.observability.dashboard_name }
+output "jobs_table_name" { value = module.data.jobs_table_name }
+output "queue_url" { value = module.messaging.queue_url }
+output "dashboard_name" { value = module.observability.dashboard_name }

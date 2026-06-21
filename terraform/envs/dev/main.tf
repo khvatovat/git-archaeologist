@@ -71,10 +71,10 @@ module "observability" {
   project = var.project
   env     = local.env
 
-  cluster_name             = module.ecs.cluster_name
-  api_service_name         = module.ecs.api_service_name
-  worker_service_name      = module.ecs.worker_service_name
-  queue_name               = module.messaging.queue_name
-  alb_arn_suffix           = module.ecs.alb_arn_suffix
-  target_group_arn_suffix  = module.ecs.target_group_arn_suffix
+  cluster_name            = module.ecs.cluster_name
+  api_service_name        = module.ecs.api_service_name
+  worker_service_name     = module.ecs.worker_service_name
+  queue_name              = module.messaging.queue_name
+  alb_arn_suffix          = module.ecs.alb_arn_suffix
+  target_group_arn_suffix = module.ecs.target_group_arn_suffix
 }

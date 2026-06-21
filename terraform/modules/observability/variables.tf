@@ -1,11 +1,11 @@
 variable "project" { type = string }
-variable "env"     { type = string }
+variable "env" { type = string }
 
-variable "cluster_name"        { type = string }
-variable "api_service_name"    { type = string }
+variable "cluster_name" { type = string }
+variable "api_service_name" { type = string }
 variable "worker_service_name" { type = string }
-variable "queue_name"          { type = string }
-variable "alb_arn_suffix"      { type = string }
+variable "queue_name" { type = string }
+variable "alb_arn_suffix" { type = string }
 variable "target_group_arn_suffix" { type = string }
 
 variable "queue_depth_alarm_threshold" {

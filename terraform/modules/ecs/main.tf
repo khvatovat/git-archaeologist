@@ -108,13 +108,13 @@ resource "aws_ecs_task_definition" "api" {
   task_role_arn            = data.aws_iam_role.lab.arn
 
   container_definitions = jsonencode([{
-    name  = "api"
-    image = var.api_image
+    name         = "api"
+    image        = var.api_image
     portMappings = [{ containerPort = 8080, protocol = "tcp" }]
     environment = [
-      { name = "AWS_REGION",   value = var.aws_region },
-      { name = "REPOS_TABLE",  value = var.repos_table_name },
-      { name = "JOBS_TABLE",   value = var.jobs_table_name },
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "REPOS_TABLE", value = var.repos_table_name },
+      { name = "JOBS_TABLE", value = var.jobs_table_name },
       { name = "SQS_QUEUE_URL", value = var.queue_url },
     ]
     logConfiguration = {
@@ -141,8 +141,8 @@ resource "aws_ecs_task_definition" "worker" {
     name  = "worker"
     image = var.worker_image
     environment = [
-      { name = "AWS_REGION",   value = var.aws_region },
-      { name = "JOBS_TABLE",   value = var.jobs_table_name },
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "JOBS_TABLE", value = var.jobs_table_name },
       { name = "SQS_QUEUE_URL", value = var.queue_url },
     ]
     secrets = [
